@@ -1,7 +1,6 @@
 package download
 
 import (
-	"bufio"
 	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"rigel-client/util"
 	"strconv"
 	"strings"
 	"sync"
@@ -313,284 +313,174 @@ func DownloadFromGCSConcurrent(ctx context.Context, localFilePath, bucketName, o
 	return nil
 }
 
-// SSHConfig 定义SSH连接配置
-type SSHConfig struct {
-	User     string // 用户名
-	Host     string // 主机IP:端口（如192.168.1.20:22）
-	Password string // 密码（或用密钥认证）
-}
-
-// getFileBasenameAndExt 提取文件的基础名和扩展名
-// 示例：
+// SSHDDReadRangeChunk 读取指定范围/全部文件的核心函数
+// 核心规则：
+//  1. length ≤ 0 → 读取整个文件（忽略start，从0开始读全部）
+//  2. length > 0  → 读取 [start, start+length) 范围的内容
 //
-//	bigfile.bin → bigfile, .bin
-//	logs → logs, ""
-//	archive.tar.gz → archive, .tar.gz
-func getFileBasenameAndExt(filename string) (basename, ext string) {
-	// 处理隐藏文件（如 .bashrc）
-	if strings.HasPrefix(filename, ".") && !strings.Contains(filename[1:], ".") {
-		return filename, ""
-	}
-	// 分割基础名和扩展名
-	extIndex := strings.LastIndex(filename, ".")
-	if extIndex == -1 {
-		return filename, ""
-	}
-	return filename[:extIndex], filename[extIndex:]
-}
+// 参数说明：
+//
+//	ctx: 上下文
+//	cfg: SSH连接配置
+//	remoteDir: 远端文件所在目录（如/mnt/remote-data）
+//	filename: 要读取的文件名（如bigfile.bin）
+//	localDir: 本地存储目录（如/home/matth/upload/）
+//	start: 读取起始位置（字节）；length≤0时该参数无效
+//	length: 读取长度（字节）；≤0时读取全部文件
+//	bs: dd命令块大小（建议传空字符串，函数自动适配）
+//	pre: 日志前缀
+//	logger: 日志对象
+//
+// 返回值：
+//
+//	本地文件路径 / 错误信息
+func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, localDir string,
+	start, length int64, bs string, pre string, logger *slog.Logger) (string, error) {
 
-// formatBytesToGB 字节数转GB字符串（方便文件名显示）
-func formatBytesToGB(bytes int64) string {
-	return fmt.Sprintf("%.0f", float64(bytes)/(1024*1024*1024))
-}
-
-// SSHDDReadRangeChunk 下载指定范围的单个分片（核心函数）
-// 参数增加 pre 和 logger，和GCS函数日志风格对齐
-func SSHDDReadRangeChunk(ctx context.Context, cfg SSHConfig, remoteDir, filename, localDir string, bs string,
-	rangeStart, rangeLength int64, chunkIndex, chunksPerGoroutine int, pre string, logger *slog.Logger) (string, error) {
-
-	// 拼接完整的远端文件路径
+	// 1. 拼接远端文件完整路径
 	remoteFile := filepath.Join(remoteDir, filename)
 
-	// 1. 先解析bs对应的字节数（比如1G=1073741824字节）
-	bsBytes, err := getBsInBytes(ctx, cfg, bs, pre, logger)
+	// 2. 处理length ≤ 0的情况（读取全部文件）
+	var actualStart, actualLength int64
+	if length <= 0 {
+		// 获取远端文件总大小
+		fileSize, err := getRemoteFileSize(ctx, cfg, remoteDir, filename, pre, logger)
+		if err != nil {
+			return "", fmt.Errorf("获取文件大小失败：%w", err)
+		}
+		actualStart = 0         // 从文件开头读取
+		actualLength = fileSize // 读取完整文件大小
+		logger.Info("读取整个文件",
+			slog.String("pre", pre),
+			slog.String("远端文件", remoteFile),
+			slog.Int64("文件总大小(字节)", actualLength))
+	} else {
+		// 验证start合法性（length>0时start不能为负）
+		if start < 0 {
+			return "", fmt.Errorf("start不能小于0（length>0时）")
+		}
+		actualStart = start
+		actualLength = length
+		logger.Info("读取指定范围文件",
+			slog.String("pre", pre),
+			slog.String("远端文件", remoteFile),
+			slog.Int64("起始位置(字节)", actualStart),
+			slog.Int64("读取长度(字节)", actualLength))
+	}
+
+	// 3. 自动选择最优块大小（如果bs为空）
+	if strings.TrimSpace(bs) == "" {
+		bs = autoSelectBs(actualLength)
+		logger.Info("自动选择块大小",
+			slog.String("pre", pre),
+			slog.String("块大小", bs))
+	}
+
+	// 4. 解析块大小为字节数
+	bsBytes, err := parseBsToBytes(bs)
 	if err != nil {
-		return "", fmt.Errorf("分片%d：解析块大小失败：%w", chunkIndex, err)
+		return "", fmt.Errorf("解析块大小失败：%w", err)
 	}
 
-	// 2. 计算当前分片在「目标范围」内的偏移
-	chunkOffsetInRange := int64(chunkIndex*chunksPerGoroutine) * bsBytes
-	if chunkOffsetInRange >= rangeLength {
-		logger.Debug("Chunk out of range, skip",
-			slog.String("pre", pre),
-			slog.Int64("chunk_offset_in_range", chunkOffsetInRange),
-			slog.Int64("range_length", rangeLength),
-			slog.Int("chunk_index", chunkIndex))
-		return "", nil // 超出目标范围，无需处理
-	}
+	// 5. 构造本地输出文件名
+	localFileName := buildLocalFileName(filename, actualStart, actualLength)
+	localFilePath := filepath.Join(localDir, localFileName)
 
-	// 3. 计算当前分片的实际读取长度（最后一个分片可能不足）
-	chunkLength := int64(chunksPerGoroutine) * bsBytes
-	if chunkOffsetInRange+chunkLength > rangeLength {
-		chunkLength = rangeLength - chunkOffsetInRange
-	}
+	// 6. 计算dd命令参数（skip=跳过的块数，count=读取的块数）
+	skip := actualStart / bsBytes                   // 定位到起始位置需要跳过的块数
+	count := (actualLength + bsBytes - 1) / bsBytes // 需要读取的块数（向上取整）
+	ddCmd := fmt.Sprintf("dd if=%s bs=%s skip=%d count=%d", remoteFile, bs, skip, count)
 
-	// 4. 转换为dd的skip和count参数
-	skip := (rangeStart / bsBytes) + (chunkOffsetInRange / bsBytes)
-	count := (chunkLength + bsBytes - 1) / bsBytes
-
-	if count <= 0 {
-		logger.Debug("Chunk count is zero, skip",
-			slog.String("pre", pre),
-			slog.Int("chunk_index", chunkIndex),
-			slog.Int64("chunk_length", chunkLength),
-			slog.Int64("bs_bytes", bsBytes))
-		return "", nil
-	}
-
-	// 5. 构造有意义的分片文件名
-	basename, ext := getFileBasenameAndExt(filename)
-	rangeStartGB := formatBytesToGB(rangeStart)
-	rangeEndGB := formatBytesToGB(rangeStart + rangeLength)
-	chunkFileName := fmt.Sprintf("%s_%s_%sGB_chunk_%d%s",
-		basename, rangeStartGB, rangeEndGB, chunkIndex, ext)
-	localFile := filepath.Join(localDir, chunkFileName)
-
-	// 结构化日志：记录分片下载开始（和GCS风格一致）
-	logger.Info("Downloading file range chunk from remote server using dd",
-		slog.String("pre", pre),
-		slog.String("remote_file", remoteFile),
-		slog.String("local_file", localFile),
-		slog.Int("chunk_index", chunkIndex),
-		slog.Int64("range_start_byte", rangeStart+chunkOffsetInRange),
-		slog.Int64("range_end_byte", rangeStart+chunkOffsetInRange+chunkLength),
-		slog.Int64("dd_skip", skip),
-		slog.Int64("dd_count", count),
-		slog.String("dd_bs", bs))
-
-	// 6. 配置SSH客户端
+	// 7. 初始化SSH客户端配置
 	sshConfig := &ssh.ClientConfig{
-		User: cfg.User,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(cfg.Password),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境需替换为合法验证
-		Timeout:         30 * time.Second,
+		User:            cfg.User,
+		Auth:            []ssh.AuthMethod{ssh.Password(cfg.Password)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境建议替换为合法的密钥验证
+		Timeout:         5 * time.Minute,             // 增大超时适配大文件读取
 	}
 
-	// 7. 建立SSH连接
+	// 8. 建立SSH连接
 	client, err := ssh.Dial("tcp", cfg.Host, sshConfig)
 	if err != nil {
-		return "", fmt.Errorf("分片%d：SSH连接失败：%w", chunkIndex, err)
+		return "", fmt.Errorf("SSH连接失败：%w", err)
 	}
 	defer client.Close()
 
-	// 8. 创建会话+执行dd命令
+	// 9. 创建SSH会话
 	session, err := client.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("分片%d：创建SSH会话失败：%w", chunkIndex, err)
+		return "", fmt.Errorf("创建SSH会话失败：%w", err)
 	}
 	defer session.Close()
 
-	ddCmd := fmt.Sprintf("dd if=%s bs=%s count=%d skip=%d", remoteFile, bs, count, skip)
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("分片%d：获取stdout失败：%w", chunkIndex, err)
-	}
-
-	// 9. 启动dd命令
-	if err := session.Start(ddCmd); err != nil {
-		return "", fmt.Errorf("分片%d：启动dd命令失败：%w", chunkIndex, err)
-	}
-
 	// 10. 确保本地目录存在
 	if err := os.MkdirAll(localDir, 0755); err != nil {
-		return "", fmt.Errorf("分片%d：创建本地目录失败：%w", chunkIndex, err)
+		return "", fmt.Errorf("创建本地目录失败：%w", err)
 	}
 
-	// 11. 写入本地分片文件
-	localFd, err := os.Create(localFile)
+	// 11. 创建本地文件（覆盖已有文件）
+	localFd, err := os.Create(localFilePath)
 	if err != nil {
-		return "", fmt.Errorf("分片%d：创建本地文件失败：%w", chunkIndex, err)
+		return "", fmt.Errorf("创建本地文件失败：%w", err)
 	}
 	defer localFd.Close()
 
-	bufWriter := bufio.NewWriter(localFd)
-	defer bufWriter.Flush()
-	_, err = io.Copy(bufWriter, stdout)
-	if err != nil {
-		return "", fmt.Errorf("分片%d：写入本地文件失败：%w", chunkIndex, err)
-	}
-
-	// 12. 等待命令完成
-	if err := session.Wait(); err != nil {
-		return "", fmt.Errorf("分片%d：dd命令执行失败：%w", chunkIndex, err)
-	}
-
-	// 结构化日志：分片下载成功（和GCS风格一致）
-	logger.Info("File range chunk download success",
+	// 12. 执行dd命令并将输出写入本地文件
+	logger.Info("执行dd命令",
 		slog.String("pre", pre),
-		slog.String("remote_file", remoteFile),
-		slog.String("local_file", localFile),
-		slog.Int("chunk_index", chunkIndex),
-		slog.Int64("range_start_byte", rangeStart+chunkOffsetInRange),
-		slog.Int64("range_end_byte", rangeStart+chunkOffsetInRange+chunkLength))
+		slog.String("命令", ddCmd),
+		slog.String("输出文件", localFilePath))
 
-	return localFile, nil
+	// 获取dd命令的标准输出管道
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("获取stdout管道失败：%w", err)
+	}
+
+	// 启动dd命令
+	if err := session.Start(ddCmd); err != nil {
+		return "", fmt.Errorf("启动dd命令失败：%w，命令：%s", err, ddCmd)
+	}
+
+	// 一次性将dd输出拷贝到本地文件（核心读取逻辑）
+	_, err = io.Copy(localFd, stdout)
+	if err != nil {
+		return "", fmt.Errorf("写入本地文件失败：%w", err)
+	}
+
+	// 等待dd命令执行完成
+	if err := session.Wait(); err != nil {
+		// dd返回非0不一定是失败（如最后一块不足bs），仅打警告日志
+		logger.Warn("dd命令执行完成但返回非0状态",
+			slog.String("pre", pre),
+			slog.String("错误", err.Error()))
+	}
+
+	// 验证本地文件大小（可选，增强健壮性）
+	fileInfo, err := os.Stat(localFilePath)
+	if err != nil {
+		logger.Warn("无法获取本地文件信息",
+			slog.String("pre", pre),
+			slog.String("文件", localFilePath),
+			slog.String("错误", err.Error()))
+	} else {
+		logger.Info("文件读取完成",
+			slog.String("pre", pre),
+			slog.String("本地文件", localFilePath),
+			slog.Int64("文件大小(字节)", fileInfo.Size()),
+			slog.String("预期大小(字节)", fmt.Sprintf("%d", actualLength)))
+	}
+
+	return localFileName, nil
 }
 
-// SSHDDReadRangeConcurrent 并发下载指定start/length范围的文件
-// 参数增加 ctx、pre、logger，和GCS函数完全对齐
-func SSHDDReadRangeConcurrent(ctx context.Context, cfg SSHConfig, remoteDir, filename, localDir string,
-	start, length int64, bs string, chunksPerGoroutine, concurrency int, pre string, logger *slog.Logger) error {
+// ------------------- 内部工具函数（依赖） -------------------
 
-	// 1. 校验参数
-	if length <= 0 {
-		return fmt.Errorf("length必须大于0（当前=%d）", length)
-	}
-	if start < 0 {
-		return fmt.Errorf("start不能小于0（当前=%d）", start)
-	}
-	if chunksPerGoroutine <= 0 {
-		chunksPerGoroutine = 5 // 默认每个协程处理5个块
-	}
-	if concurrency <= 0 {
-		concurrency = 4 // 默认4个协程
-	}
-	if filename == "" {
-		return fmt.Errorf("文件名不能为空")
-	}
-
-	// 2. 拼接完整路径
+// getRemoteFileSize 获取远端文件总大小（字节）
+func getRemoteFileSize(ctx context.Context, cfg util.SSHConfig, remoteDir, filename string, pre string, logger *slog.Logger) (int64, error) {
 	remoteFile := filepath.Join(remoteDir, filename)
 
-	// 3. 生成最终合并后的文件名
-	basename, ext := getFileBasenameAndExt(filename)
-	startGB := formatBytesToGB(start)
-	endGB := formatBytesToGB(start + length)
-	outputFile := filepath.Join(localDir, fmt.Sprintf("%s_%s_%sGB%s", basename, startGB, endGB, ext))
-
-	// 结构化日志：记录并发下载开始（和GCS函数风格一致）
-	logger.Info("Starting concurrent download file range from remote server using dd",
-		slog.String("pre", pre),
-		slog.String("remote_file", remoteFile),
-		slog.String("local_output_file", outputFile),
-		slog.Int64("start_byte", start),
-		slog.Int64("length_byte", length),
-		slog.String("bs", bs),
-		slog.Int("chunks_per_goroutine", chunksPerGoroutine),
-		slog.Int("concurrency", concurrency))
-
-	// 4. 解析bs字节数
-	bsBytes, err := getBsInBytes(ctx, cfg, bs, pre, logger)
-	if err != nil {
-		return fmt.Errorf("解析块大小失败：%w", err)
-	}
-
-	// 5. 计算需要的总分片数
-	totalChunks := (length + int64(chunksPerGoroutine)*bsBytes - 1) / (int64(chunksPerGoroutine) * bsBytes)
-	logger.Info("Split file range into chunks",
-		slog.String("pre", pre),
-		slog.Int64("total_chunks", totalChunks),
-		slog.Int("chunks_per_goroutine", chunksPerGoroutine),
-		slog.Int64("bs_bytes", bsBytes))
-
-	// 6. 并发下载分片
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(concurrency)
-
-	var (
-		chunkFiles = make([]string, 0, totalChunks)
-		mu         sync.Mutex
-	)
-
-	for i := 0; i < int(totalChunks); i++ {
-		chunkIndex := i
-		eg.Go(func() error {
-			chunkFile, err := SSHDDReadRangeChunk(
-				ctx, cfg, remoteDir, filename, localDir, bs,
-				start, length, chunkIndex, chunksPerGoroutine,
-				pre, logger,
-			)
-			if err != nil {
-				return err
-			}
-			if chunkFile != "" {
-				mu.Lock()
-				chunkFiles = append(chunkFiles, chunkFile)
-				mu.Unlock()
-			}
-			return nil
-		})
-	}
-
-	// 7. 等待所有协程完成
-	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("并发下载失败：%w", err)
-	}
-
-	// 8. 合并分片为最终文件
-	if len(chunkFiles) > 0 {
-		if err := MergeChunks(ctx, chunkFiles, outputFile, pre, logger); err != nil {
-			return fmt.Errorf("合并分片失败：%w", err)
-		}
-
-		// 结构化日志：整体下载成功（和GCS函数风格一致）
-		logger.Info("Concurrent file range download success",
-			slog.String("pre", pre),
-			slog.String("remote_file", remoteFile),
-			slog.String("local_output_file", outputFile),
-			slog.Int64("start_byte", start),
-			slog.Int64("length_byte", length),
-			slog.Int("total_chunks", len(chunkFiles)))
-	}
-
-	return nil
-}
-
-// ------------------- 通用工具函数（适配slog日志） -------------------
-// getBsInBytes 解析bs单位为字节数（适配slog日志）
-func getBsInBytes(ctx context.Context, cfg SSHConfig, bs string, pre string, logger *slog.Logger) (int64, error) {
+	// 初始化SSH配置
 	sshConfig := &ssh.ClientConfig{
 		User:            cfg.User,
 		Auth:            []ssh.AuthMethod{ssh.Password(cfg.Password)},
@@ -598,164 +488,164 @@ func getBsInBytes(ctx context.Context, cfg SSHConfig, bs string, pre string, log
 		Timeout:         30 * time.Second,
 	}
 
+	// 建立SSH连接
 	client, err := ssh.Dial("tcp", cfg.Host, sshConfig)
 	if err != nil {
-		logger.Error("Failed to dial SSH for bs parsing",
-			slog.String("pre", pre),
-			slog.String("host", cfg.Host),
-			slog.String("error", err.Error()))
-		return 0, err
+		return 0, fmt.Errorf("SSH连接失败：%w", err)
 	}
 	defer client.Close()
 
+	// 创建会话
 	session, err := client.NewSession()
 	if err != nil {
-		logger.Error("Failed to create SSH session for bs parsing",
-			slog.String("pre", pre),
-			slog.String("error", err.Error()))
-		return 0, err
+		return 0, fmt.Errorf("创建SSH会话失败：%w", err)
 	}
 	defer session.Close()
 
-	// 用dd命令获取bs对应的字节数
-	cmd := fmt.Sprintf("dd if=/dev/null bs=%s count=0 2>&1 | grep -oP '(?<=bs=)\\d+'", bs)
+	// 兼容Linux/macOS的stat命令
+	cmd := fmt.Sprintf("stat -c %%s '%s'", remoteFile)
 	output, err := session.CombinedOutput(cmd)
 	if err != nil {
-		logger.Error("Failed to execute dd command for bs parsing",
-			slog.String("pre", pre),
-			slog.String("cmd", cmd),
-			slog.String("output", string(output)),
-			slog.String("error", err.Error()))
-		return 0, fmt.Errorf("执行dd失败：%w，输出：%s", err, string(output))
+		cmd = fmt.Sprintf("stat -f %%z '%s'", remoteFile)
+		output, err = session.CombinedOutput(cmd)
+		if err != nil {
+			return 0, fmt.Errorf("执行stat命令失败：%w，输出：%s", err, string(output))
+		}
 	}
 
-	bsStr := strings.TrimSpace(string(output))
-	bsBytes, err := strconv.ParseInt(bsStr, 10, 64)
+	// 解析文件大小
+	sizeStr := strings.TrimSpace(string(output))
+	fileSize, err := strconv.ParseInt(sizeStr, 10, 64)
 	if err != nil {
-		logger.Error("Failed to parse bs bytes",
-			slog.String("pre", pre),
-			slog.String("bs_str", bsStr),
-			slog.String("error", err.Error()))
-		return 0, fmt.Errorf("转换失败：%w，原始输出：%s", err, bsStr)
+		return 0, fmt.Errorf("解析文件大小失败：%w，原始输出：%s", err, sizeStr)
 	}
 
-	logger.Debug("Parsed bs to bytes",
-		slog.String("pre", pre),
-		slog.String("bs", bs),
-		slog.Int64("bs_bytes", bsBytes))
-
-	return bsBytes, nil
+	return fileSize, nil
 }
 
-// MergeChunks 合并分片为完整文件（适配slog日志）
-func MergeChunks(ctx context.Context, chunkFiles []string, outputFile string, pre string, logger *slog.Logger) error {
-	logger.Info("Merging chunks to final file",
-		slog.String("pre", pre),
-		slog.String("output_file", outputFile),
-		slog.Int("total_chunks", len(chunkFiles)))
+// autoSelectBs 根据读取的总大小自动选择最优块大小
+func autoSelectBs(totalSize int64) string {
+	const (
+		_100MB = 100 * 1024 * 1024
+		_1GB   = 1024 * 1024 * 1024
+		_10GB  = 10 * _1GB
+		_100GB = 100 * _1GB
+	)
 
-	outputFd, err := os.Create(outputFile)
-	if err != nil {
-		logger.Error("Failed to create merge output file",
-			slog.String("pre", pre),
-			slog.String("output_file", outputFile),
-			slog.String("error", err.Error()))
-		return fmt.Errorf("创建合并文件失败：%w", err)
+	switch {
+	case totalSize < _100MB:
+		return "1M"
+	case totalSize < _1GB:
+		return "64M"
+	case totalSize < _10GB:
+		return "512M"
+	case totalSize < _100GB:
+		return "1G"
+	default:
+		return "2G"
 	}
-	defer outputFd.Close()
-
-	bufWriter := bufio.NewWriter(outputFd)
-	defer bufWriter.Flush()
-
-	for i, chunkFile := range chunkFiles {
-		logger.Debug("Merging chunk",
-			slog.String("pre", pre),
-			slog.Int("chunk_index", i),
-			slog.String("chunk_file", chunkFile))
-
-		chunkFd, err := os.Open(chunkFile)
-		if err != nil {
-			logger.Error("Failed to open chunk file",
-				slog.String("pre", pre),
-				slog.Int("chunk_index", i),
-				slog.String("chunk_file", chunkFile),
-				slog.String("error", err.Error()))
-			return fmt.Errorf("打开分片%d失败：%w", i, err)
-		}
-
-		_, err = io.Copy(bufWriter, chunkFd)
-		chunkFd.Close()
-		if err != nil {
-			logger.Error("Failed to copy chunk to output file",
-				slog.String("pre", pre),
-				slog.Int("chunk_index", i),
-				slog.String("chunk_file", chunkFile),
-				slog.String("error", err.Error()))
-			return fmt.Errorf("合并分片%d失败：%w", i, err)
-		}
-
-		logger.Debug("Merged chunk successfully",
-			slog.String("pre", pre),
-			slog.Int("chunk_index", i),
-			slog.String("chunk_file", chunkFile))
-	}
-
-	logger.Info("Chunks merged to final file successfully",
-		slog.String("pre", pre),
-		slog.String("output_file", outputFile))
-
-	return nil
 }
 
-// ------------------- 测试示例（和GCS函数调用风格一致） -------------------
+// parseBsToBytes 解析bs字符串为字节数（如1G→1073741824）
+func parseBsToBytes(bs string) (int64, error) {
+	bs = strings.TrimSpace(strings.ToLower(bs))
+	if bs == "" {
+		return 0, fmt.Errorf("bs不能为空")
+	}
+
+	var numStr, unit string
+	for i, c := range bs {
+		if (c >= '0' && c <= '9') || c == '.' {
+			numStr += string(c)
+		} else {
+			unit = bs[i:]
+			break
+		}
+	}
+
+	if numStr == "" {
+		return 0, fmt.Errorf("无法解析bs的数字部分：%s", bs)
+	}
+
+	num, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("解析bs数字失败：%w，输入：%s", err, numStr)
+	}
+
+	var bytes float64
+	switch unit {
+	case "k", "kb":
+		bytes = num * 1024
+	case "m", "mb":
+		bytes = num * 1024 * 1024
+	case "g", "gb":
+		bytes = num * 1024 * 1024 * 1024
+	case "t", "tb":
+		bytes = num * 1024 * 1024 * 1024 * 1024
+	default:
+		bytes = num // 无单位则为字节
+	}
+
+	return int64(bytes), nil
+}
+
+// buildLocalFileName 构造本地文件名
+func buildLocalFileName(filename string, start, length int64) string {
+
+	if length <= 0 {
+		return filename
+	}
+
+	basename := filename
+	ext := ""
+	if idx := strings.LastIndex(filename, "."); idx != -1 {
+		basename = filename[:idx]
+		ext = filename[idx:]
+	}
+
+	// 全量读取（length≤0）
+	//if length <= 0 {
+	//	return fmt.Sprintf("%s_full%s", basename, ext)
+	//}
+
+	// 指定范围读取（转换为GB便于阅读）
+	startGB := fmt.Sprintf("%.1f", float64(start)/(1024*1024*1024))
+	endGB := fmt.Sprintf("%.1f", float64(start+length)/(1024*1024*1024))
+	return fmt.Sprintf("%s_%s-%sGB%s", basename, startGB, endGB, ext)
+}
+
+// ------------------- 测试调用示例 -------------------
 //func main() {
-//	// 1. 初始化上下文和日志
+//	// 1. 初始化配置
 //	ctx := context.Background()
-//	logger := slog.Default() // 可替换为自定义的slog.Logger（如输出到文件、JSON格式）
-//	pre := "SSH_DD_DOWNLOAD" // 日志前缀，和GCS的pre参数对齐
-//
-//	// 2. 配置SSH
-//	cfg := SSHConfig{
+//	logger := slog.Default()
+//	sshCfg := SSHConfig{
 //		User:     "root",
 //		Host:     "192.168.1.20:22",
-//		Password: "your-password", // 替换为实际密码
+//		Password: "your-password",
 //	}
 //
-//	// 3. 定义下载参数
-//	const (
-//		GB          = 1024 * 1024 * 1024
-//		remoteDir   = "/mnt/remote-data" // 远端目录
-//		filename    = "bigfile.bin"      // 文件名
-//		localDir    = "/mnt/local-data"  // 本地目录
-//		start       = 20 * GB            // 起始位置20GB
-//		length      = 10 * GB            // 读取10GB
-//		bs          = "1G"               // 基础块大小1GB
-//		chunksPerGo = 2                  // 每个协程处理2个块（2GB）
-//		concurrency = 3                  // 3个协程并发
+//	// 示例1：读取全部文件（length≤0）
+//	localFile1, err := SSHDDReadRangeChunk(
+//		ctx, sshCfg,
+//		"/mnt/remote-data", "bigfile.bin", // 远端文件路径
+//		"/home/matth/upload/",            // 本地存储目录
+//		0, -1,                            // start=任意值, length=-1（读全部）
+//		"", "SSH_READ", logger,           // bs传空（自动适配）
 //	)
-//
-//	// 4. 执行并发下载（参数风格和GCS函数完全一致）
-//	err := SSHDDReadRangeConcurrent(
-//		ctx,
-//		cfg,
-//		remoteDir,
-//		filename,
-//		localDir,
-//		start,
-//		length,
-//		bs,
-//		chunksPerGo,
-//		concurrency,
-//		pre,
-//		logger,
-//	)
-//
 //	if err != nil {
-//		logger.Error("Concurrent download failed",
-//			slog.String("pre", pre),
-//			slog.String("error", err.Error()))
-//		os.Exit(1)
+//		logger.Error("读取全部文件失败", slog.String("错误", err.Error()))
+//		return
 //	}
 //
-//	logger.Info("All download tasks completed successfully", slog.String("pre", pre))
+//	// 示例2：读取指定范围（20GB开始，读10GB）
+//	// localFile2, err := SSHDDReadRangeChunk(
+//	// 	ctx, sshCfg,
+//	// 	"/mnt/remote-data", "bigfile.bin",
+//	// 	"/home/matth/upload/",
+//	// 	20*1024*1024*1024, 10*1024*1024*1024, // start=20GB, length=10GB
+//	// 	"", "SSH_READ", logger,
+//	// )
+//
+//	logger.Info("操作完成", slog.String("本地文件", localFile1))
 //}

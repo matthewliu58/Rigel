@@ -43,6 +43,12 @@ func main() {
 	api.CredFile = config.Config_.CredFile
 	api.BucketName = config.Config_.BucketName
 	api.LocalBaseDir = config.Config_.LocalBaseDir
+	api.RemoteDiskDir = config.Config_.SSH.RemoteDir
+	api.RemoteDiskSSHConfig = util.SSHConfig{
+		User:     config.Config_.SSH.User,
+		Host:     config.Config_.SSH.Host,
+		Password: config.Config_.SSH.Password,
+	}
 
 	logger.Info("config data", slog.String("pre", pre), slog.Any("data", config.Config_))
 
@@ -61,7 +67,7 @@ func main() {
 	//
 	//router.POST("/gcp/upload/redirect/v1", api.RedirectV1Handler(logger))
 
-	router.POST("/gcp/upload/redirect/v2", api.RedirectV2Handler(logger))
+	//router.POST("/gcp/upload/redirect/v2", api.RedirectV2Handler(logger))
 
 	port := "8080"
 	logger.Info("Starting server on port", slog.String("pre", pre), slog.String("port", port))

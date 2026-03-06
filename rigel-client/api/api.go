@@ -25,11 +25,16 @@ const (
 )
 
 var (
+	RemoteDiskSSHConfig util.SSHConfig
+	RemoteDiskDir       string
+
 	CredFileSource   string
 	BucketNameSource string
-	CredFile         string
-	BucketName       string
-	LocalBaseDir     string
+
+	CredFile   string
+	BucketName string
+
+	LocalBaseDir string
 )
 
 type ApiResponse struct {
@@ -97,7 +102,7 @@ func ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		localFilePath := LocalBaseDir + fileName
 		ctx := context.Background()
 
-		if sourceType == "cloud" {
+		if sourceType == "gcp-cloud" {
 			err := download.DownloadFromGCSbyClient(ctx, localFilePath, BucketNameSource,
 				fileName, CredFileSource, 0, 0, pre, logger)
 			if err != nil {
@@ -105,6 +110,15 @@ func ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+		} else if sourceType == "remote-disk" {
+			localFileName, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
+				localFilePath, 0, 0, "", pre, logger)
+			if err != nil {
+				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			fileName = localFileName
 		}
 
 		if err := upload.UploadToGCSbyClient(ctx, localFilePath, BucketName, fileName, CredFile, logger); err != nil {
@@ -329,7 +343,7 @@ func Upload(logger *slog.Logger) gin.HandlerFunc {
 		ctx := context.Background()
 		localFilePath := LocalBaseDir + fileName
 
-		if sourceType == "cloud" {
+		if sourceType == "gcp-cloud" {
 			err := download.DownloadFromGCSbyClient(ctx, localFilePath, BucketNameSource,
 				fileName, CredFileSource, 0, 0, pre, logger)
 			if err != nil {

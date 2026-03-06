@@ -36,3 +36,10 @@ type PathInfo struct {
 type RoutingInfo struct {
 	Routing []PathInfo `json:"routing"`
 }
+
+// SSHConfig 定义SSH连接配置
+type SSHConfig struct {
+	User     string // 用户名
+	Host     string // 主机IP:端口（如192.168.1.20:22）
+	Password string // 密码（或用密钥认证）
+}
