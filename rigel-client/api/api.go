@@ -165,15 +165,26 @@ func RedirectV2Handler(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		fileName := c.GetHeader(HeaderFileName)
+		sourceType := c.GetHeader(DataSourceType)
 		if fileName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name header"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name or X-Data-Source-Type header"})
 			return
 		}
 		localFilePath := LocalBaseDir + fileName
+		ctx := context.Background()
+
+		if sourceType == "cloud" {
+			err := download.DownloadFromGCSbyClient(ctx, localFilePath, BucketNameSource,
+				fileName, CredFileSource, 0, 0, pre, logger)
+			if err != nil {
+				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
 
 		//没有路径直传
 		if len(routingInfo.Routing) == 0 {
-			ctx := context.Background()
 			if err := upload.UploadToGCSbyClient(ctx, localFilePath, BucketName, fileName, CredFile, logger); err != nil {
 				logger.Error("Upload failed: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -233,8 +244,9 @@ func Upload(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		fileName := c.GetHeader(HeaderFileName)
+		sourceType := c.GetHeader(DataSourceType)
 		if fileName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name header"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name or X-Data-Source-Type header"})
 			return
 		}
 
@@ -314,8 +326,21 @@ func Upload(logger *slog.Logger) gin.HandlerFunc {
 			return
 		}
 
+		ctx := context.Background()
+		localFilePath := LocalBaseDir + fileName
+
+		if sourceType == "cloud" {
+			err := download.DownloadFromGCSbyClient(ctx, localFilePath, BucketNameSource,
+				fileName, CredFileSource, 0, 0, pre, logger)
+			if err != nil {
+				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
 		uploadInfo := upload.UploadFileInfo{
-			LocalFilePath: LocalBaseDir + fileName,
+			LocalFilePath: localFilePath,
 			BucketName:    BucketName,
 			FileName:      fileName,
 			CredFile:      CredFile,

@@ -1,5 +1,5 @@
 port: "8080"
-control_host: "http://34.96.131.245:8081"
+control_host: "http://127.0.0.1:8081"
 cred_file_source: "/home/matth/civil-honor-480405-e0-e62b994bbc27.json"
 bucket_name_source: "rigel-data"
 cred_file: "/home/matth/civil-honor-480405-e0-e62b994bbc27.json"
