@@ -112,7 +112,7 @@ func ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 			}
 		} else if sourceType == "remote-disk" {
 			localFileName, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-				localFilePath, 0, 0, "", pre, logger)
+				LocalBaseDir, 0, 0, "", pre, logger)
 			if err != nil {
 				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

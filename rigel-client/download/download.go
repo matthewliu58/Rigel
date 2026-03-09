@@ -340,6 +340,8 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 	// 1. 拼接远端文件完整路径
 	remoteFile := filepath.Join(remoteDir, filename)
 
+	split := false
+
 	// 2. 处理length ≤ 0的情况（读取全部文件）
 	var actualStart, actualLength int64
 	if length <= 0 {
@@ -359,6 +361,7 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 		if start < 0 {
 			return "", fmt.Errorf("start不能小于0（length>0时）")
 		}
+		split = true
 		actualStart = start
 		actualLength = length
 		logger.Info("读取指定范围文件",
@@ -383,7 +386,7 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 	}
 
 	// 5. 构造本地输出文件名
-	localFileName := buildLocalFileName(filename, actualStart, actualLength)
+	localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
 	localFilePath := filepath.Join(localDir, localFileName)
 
 	// 6. 计算dd命令参数（skip=跳过的块数，count=读取的块数）
@@ -590,9 +593,9 @@ func parseBsToBytes(bs string) (int64, error) {
 }
 
 // buildLocalFileName 构造本地文件名
-func buildLocalFileName(filename string, start, length int64) string {
+func buildLocalFileName(filename string, start, length int64, split bool) string {
 
-	if length <= 0 {
+	if !split {
 		return filename
 	}
 
@@ -608,10 +611,10 @@ func buildLocalFileName(filename string, start, length int64) string {
 	//	return fmt.Sprintf("%s_full%s", basename, ext)
 	//}
 
-	// 指定范围读取（转换为GB便于阅读）
-	startGB := fmt.Sprintf("%.1f", float64(start)/(1024*1024*1024))
-	endGB := fmt.Sprintf("%.1f", float64(start+length)/(1024*1024*1024))
-	return fmt.Sprintf("%s_%s-%sGB%s", basename, startGB, endGB, ext)
+	// 指定范围读取
+	start_ := fmt.Sprintf("%.1f", start)
+	end_ := fmt.Sprintf("%.1f", start+length)
+	return fmt.Sprintf("%s_%s-%s%s", basename, start_, end_, ext)
 }
 
 // ------------------- 测试调用示例 -------------------
