@@ -8,8 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"rigel-client/config"
 	"rigel-client/download"
 	"rigel-client/upload"
@@ -374,77 +372,5 @@ func Upload(logger *slog.Logger) gin.HandlerFunc {
 			"file_name": fileName,
 		})
 
-	}
-}
-
-// FileReceiveHandler 接收客户端上传的文件并保存到LocalBaseDir
-// 适配现有架构：带logger、pre日志标识、配置复用LocalBaseDir
-func FileReceiveHandler(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// 1. 生成日志标识，和现有逻辑保持一致
-		pre := util.GenerateRandomLetters(5)
-		logger.Info("FileReceiveHandler start", slog.String("pre", pre))
-
-		// 2. 从表单获取上传的文件（支持multipart/form-data）
-		file, fileHeader, err := c.Request.FormFile("file")
-		if err != nil {
-			logger.Error("get upload file failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "获取上传文件失败: " + err.Error(),
-			})
-			return
-		}
-		defer file.Close()
-
-		// 3. 从Header获取自定义文件名（兼容现有Header规范）
-		customFileName := c.GetHeader(HeaderFileName)
-		// 如果Header没传文件名，使用上传文件的原始名
-		fileName := fileHeader.Filename
-		if customFileName != "" {
-			fileName = customFileName
-		}
-		logger.Info("file info", slog.String("pre", pre),
-			slog.String("file_name", fileName),
-			slog.Int64("file_size", fileHeader.Size))
-
-		// 4. 确保保存目录存在（复用配置的LocalBaseDir）
-		if err := os.MkdirAll(LocalBaseDir, 0755); err != nil {
-			logger.Error("create local base dir failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "创建本地目录失败: " + err.Error(),
-			})
-			return
-		}
-
-		// 5. 生成文件保存路径（防止路径注入）
-		savePath := filepath.Join(LocalBaseDir, filepath.Base(fileName))
-		// 创建目标文件
-		outFile, err := os.Create(savePath)
-		if err != nil {
-			logger.Error("create save file failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "创建保存文件失败: " + err.Error(),
-			})
-			return
-		}
-		defer outFile.Close()
-
-		// 6. 写入文件内容（高效复制，支持大文件）
-		if _, err := outFile.ReadFrom(file); err != nil {
-			logger.Error("save file content failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "保存文件内容失败: " + err.Error(),
-			})
-			return
-		}
-
-		// 7. 返回200成功响应（和现有接口响应格式保持一致）
-		logger.Info("FileReceiveHandler success", slog.String("pre", pre), slog.String("save_path", savePath))
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "file upload and save success",
-			"file_name": fileName,
-			"save_path": savePath,
-			"file_size": fileHeader.Size,
-		})
 	}
 }

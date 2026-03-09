@@ -58,7 +58,8 @@ func main() {
 	router.POST("/gcp/upload/client", api.ClientUploadHandler(logger))
 
 	// ========== 新增文件接收上传接口 ==========
-	router.POST("/api/v1/upload-file", api.FileReceiveHandler(logger))
+	router.POST("/api/v1/chunk/upload", api.ChunkUploadHandler(logger)) // 分片上传（自定义名）
+	router.POST("/api/v1/chunk/merge", api.ChunkMergeHandler(logger))   // 分片合并（指定顺序）
 
 	// ========== 新增 HTTPS 直传 ==========
 	//router.POST("/gcp/upload/direct", api.DirectUploadHandler(logger))
