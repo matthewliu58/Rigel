@@ -477,6 +477,272 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 	return localFileName, nil
 }
 
+// SSHDDReadRangeConcurrent 并发读取远端文件（指定范围/全量）
+// 核心逻辑：
+//  1. 将读取范围拆分为多个子分片，并发执行dd命令读取
+//  2. 每个子分片读取后写入本地文件的指定偏移位置
+//  3. 支持自定义分片大小和并发数
+//
+// 参数说明：
+//
+//	chunkSize: 每个子分片的大小（字节，传0使用默认100MB）
+//	concurrency: 并发数（传0使用默认8）
+func SSHDDReadRangeConcurrent(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, localDir string,
+	start, length, chunkSize int64, concurrency int, bs string, pre string, logger *slog.Logger) (string, error) {
+
+	// 1. 初始化默认值
+	if chunkSize <= 0 {
+		chunkSize = defaultChunkSize // 复用GCS的默认分片大小（100MB）
+	}
+	if concurrency <= 0 {
+		concurrency = 8
+	}
+
+	// 2. 先获取远端文件总大小 + 计算实际读取范围（复用原有逻辑）
+	remoteFile := filepath.Join(remoteDir, filename)
+	var (
+		actualStart   int64
+		actualLength  int64
+		totalFileSize int64
+		split         bool
+		err           error
+	)
+
+	// 获取远端文件总大小
+	totalFileSize, err = getRemoteFileSize(ctx, cfg, remoteDir, filename, pre, logger)
+	if err != nil {
+		return "", fmt.Errorf("获取远端文件大小失败：%w", err)
+	}
+
+	// 计算实际读取范围
+	if length <= 0 {
+		// 全量读取
+		actualStart = 0
+		actualLength = totalFileSize
+		split = false
+		logger.Info("并发读取整个文件",
+			slog.String("pre", pre),
+			slog.String("远端文件", remoteFile),
+			slog.Int64("文件总大小", totalFileSize),
+			slog.Int64("分片大小", chunkSize),
+			slog.Int("并发数", concurrency))
+	} else {
+		// 指定范围读取
+		if start < 0 {
+			return "", fmt.Errorf("start不能小于0（length>0时）")
+		}
+		actualStart = start
+		actualLength = length
+		split = true
+
+		// 校验范围合法性
+		if actualStart >= totalFileSize {
+			return "", fmt.Errorf("起始位置%d超出文件总大小%d", actualStart, totalFileSize)
+		}
+		// 修正结束位置（防止超出文件大小）
+		endPos := actualStart + actualLength
+		if endPos > totalFileSize {
+			actualLength = totalFileSize - actualStart
+			logger.Warn("读取范围超出文件大小，自动调整长度",
+				slog.String("pre", pre),
+				slog.Int64("原长度", length),
+				slog.Int64("调整后长度", actualLength))
+		}
+
+		logger.Info("并发读取指定范围文件",
+			slog.String("pre", pre),
+			slog.String("远端文件", remoteFile),
+			slog.Int64("起始位置", actualStart),
+			slog.Int64("读取长度", actualLength),
+			slog.Int64("分片大小", chunkSize),
+			slog.Int("并发数", concurrency))
+	}
+
+	// 3. 如果读取长度≤分片大小，直接使用单分片读取（复用原有函数）
+	if actualLength <= chunkSize {
+		logger.Info("读取长度小于等于分片大小，使用单分片读取", slog.String("pre", pre))
+		return SSHDDReadRangeChunk(ctx, cfg, remoteDir, filename, localDir,
+			actualStart, actualLength, bs, pre, logger)
+	}
+
+	// 4. 构造本地文件名（复用原有逻辑）
+	localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
+	localFilePath := filepath.Join(localDir, localFileName)
+
+	// 5. 创建本地文件并预分配空间
+	localFile, err := os.Create(localFilePath)
+	if err != nil {
+		return "", fmt.Errorf("创建本地文件失败：%w", err)
+	}
+	defer localFile.Close()
+
+	// 预分配文件空间（避免频繁扩容）
+	if err := localFile.Truncate(actualLength); err != nil {
+		return "", fmt.Errorf("预分配文件空间失败：%w", err)
+	}
+
+	// 6. 计算总分片数（向上取整）
+	totalChunks := (actualLength + chunkSize - 1) / chunkSize
+	logger.Info("拆分读取范围为子分片",
+		slog.String("pre", pre),
+		slog.Int64("总分片数", totalChunks),
+		slog.Int64("每个分片大小", chunkSize))
+
+	// 7. 使用errgroup管理并发goroutine（支持错误传播+并发限制）
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.SetLimit(concurrency)
+
+	// 8. 进度统计
+	var (
+		completedChunks int64
+		mu              sync.Mutex
+	)
+
+	// 9. 遍历所有子分片，启动并发读取
+	for i := int64(0); i < totalChunks; i++ {
+		chunkIndex := i // 捕获循环变量
+
+		eg.Go(func() error {
+			// 计算当前子分片的全局范围（远端文件的绝对位置）
+			chunkGlobalStart := actualStart + chunkIndex*chunkSize
+			chunkGlobalEnd := chunkGlobalStart + chunkSize
+
+			// 最后一个分片修正结束位置
+			if chunkGlobalEnd > actualStart+actualLength {
+				chunkGlobalEnd = actualStart + actualLength
+			}
+			chunkLength := chunkGlobalEnd - chunkGlobalStart
+
+			// 计算当前子分片在本地文件中的写入偏移（本地文件从0开始）
+			chunkLocalOffset := chunkGlobalStart - actualStart
+
+			logger.Debug("开始读取子分片",
+				slog.String("pre", pre),
+				slog.Int64("分片索引", chunkIndex),
+				slog.Int64("全局起始位置", chunkGlobalStart),
+				slog.Int64("全局结束位置", chunkGlobalEnd),
+				slog.Int64("分片长度", chunkLength),
+				slog.Int64("本地写入偏移", chunkLocalOffset))
+
+			// 自动选择块大小（复用原有逻辑）
+			chunkBs := bs
+			if strings.TrimSpace(chunkBs) == "" {
+				chunkBs = autoSelectBs(chunkLength)
+			}
+
+			// 解析块大小为字节数（用于计算dd的skip和count）
+			bsBytes, err := parseBsToBytes(chunkBs)
+			if err != nil {
+				return fmt.Errorf("分片%d：解析块大小失败：%w", chunkIndex, err)
+			}
+
+			// 计算dd命令的skip和count
+			skip := chunkGlobalStart / bsBytes             // 跳过的块数
+			count := (chunkLength + bsBytes - 1) / bsBytes // 读取的块数（向上取整）
+
+			// 构造dd命令（读取指定范围）
+			ddCmd := fmt.Sprintf("dd if=%s bs=%s skip=%d count=%d",
+				remoteFile, chunkBs, skip, count)
+
+			// 初始化SSH客户端（每个分片独立创建连接，避免连接复用冲突）
+			sshConfig := &ssh.ClientConfig{
+				User:            cfg.User,
+				Auth:            []ssh.AuthMethod{ssh.Password(cfg.Password)},
+				HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+				Timeout:         5 * time.Minute,
+			}
+
+			// 建立SSH连接
+			client, err := ssh.Dial("tcp", cfg.Host, sshConfig)
+			if err != nil {
+				return fmt.Errorf("分片%d：SSH连接失败：%w", chunkIndex, err)
+			}
+			defer client.Close()
+
+			// 创建SSH会话
+			session, err := client.NewSession()
+			if err != nil {
+				return fmt.Errorf("分片%d：创建SSH会话失败：%w", chunkIndex, err)
+			}
+			defer session.Close()
+
+			// 获取dd命令的标准输出管道
+			stdout, err := session.StdoutPipe()
+			if err != nil {
+				return fmt.Errorf("分片%d：获取stdout管道失败：%w", chunkIndex, err)
+			}
+
+			// 启动dd命令
+			if err := session.Start(ddCmd); err != nil {
+				return fmt.Errorf("分片%d：启动dd命令失败：%w，命令：%s", chunkIndex, err, ddCmd)
+			}
+
+			// 定位到本地文件的指定偏移位置
+			_, err = localFile.Seek(chunkLocalOffset, io.SeekStart)
+			if err != nil {
+				return fmt.Errorf("分片%d：定位文件偏移失败：%w", chunkIndex, err)
+			}
+
+			// 将dd输出写入本地文件
+			written, err := io.Copy(localFile, stdout)
+			if err != nil {
+				return fmt.Errorf("分片%d：写入本地文件失败：%w", chunkIndex, err)
+			}
+
+			// 等待dd命令执行完成
+			if err := session.Wait(); err != nil {
+				logger.Warn("分片%d：dd命令返回非0状态（可能是正常情况）",
+					slog.String("pre", pre),
+					slog.Int64("分片索引", chunkIndex),
+					slog.String("错误", err.Error()))
+			}
+
+			// 验证写入大小（允许最后一个分片略小，因为dd可能返回不足bs的块）
+			if written < chunkLength && !(chunkIndex == totalChunks-1) {
+				return fmt.Errorf("分片%d：写入大小不匹配（预期%d，实际%d）",
+					chunkIndex, chunkLength, written)
+			}
+
+			// 更新进度
+			mu.Lock()
+			completedChunks++
+			progress := float64(completedChunks) / float64(totalChunks) * 100
+			mu.Unlock()
+
+			logger.Debug("子分片读取完成",
+				slog.String("pre", pre),
+				slog.Int64("分片索引", chunkIndex),
+				slog.Float64("进度(%)", progress),
+				slog.Int64("写入字节数", written))
+
+			return nil
+		})
+	}
+
+	// 10. 等待所有并发分片读取完成
+	if err := eg.Wait(); err != nil {
+		return "", fmt.Errorf("并发读取失败：%w", err)
+	}
+
+	// 11. 验证最终文件大小
+	fileInfo, err := os.Stat(localFilePath)
+	if err != nil {
+		logger.Warn("无法验证本地文件大小",
+			slog.String("pre", pre),
+			slog.String("本地文件", localFilePath),
+			slog.String("错误", err.Error()))
+	} else {
+		logger.Info("并发读取完成",
+			slog.String("pre", pre),
+			slog.String("远端文件", remoteFile),
+			slog.String("本地文件", localFilePath),
+			slog.Int64("实际读取大小", fileInfo.Size()),
+			slog.Int64("预期读取大小", actualLength))
+	}
+
+	return localFileName, nil
+}
+
 // ------------------- 内部工具函数（依赖） -------------------
 
 // getRemoteFileSize 获取远端文件总大小（字节）
