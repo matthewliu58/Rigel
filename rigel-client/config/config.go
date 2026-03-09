@@ -24,12 +24,12 @@ type Config struct {
 		RemoteDir string `yaml:"remote_dir"` // 远端文件目录（如/mnt/remote-data）
 	} `yaml:"ssh"`
 
-	CredFileSource   string `yaml:"cred_file"`      // GCP / 服务凭证文件
-	BucketNameSource string `yaml:"local_base_dir"` // 本地上传目录
+	CredFileSource   string `yaml:"cred_file_source"`   // GCP / 服务凭证文件
+	BucketNameSource string `yaml:"bucket_name_source"` // 本地上传目录
 
 	CredFile   string `yaml:"cred_file"` // GCP / 服务凭证文件
 	BucketName string `yaml:"bucket_name"`
-	
+
 	LocalBaseDir string `yaml:"local_base_dir"` // 本地上传目录
 }
 
