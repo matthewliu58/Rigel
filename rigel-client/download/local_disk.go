@@ -36,13 +36,13 @@ import (
 // 返回值：
 //
 //	本地文件路径 / 错误信息
-func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, localDir string,
+func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, newFilename, localDir string,
 	start, length int64, bs string, pre string, logger *slog.Logger) (string, error) {
 
 	// 1. 拼接远端文件完整路径
 	remoteFile := filepath.Join(remoteDir, filename)
 
-	split := false
+	//split := false
 
 	// 2. 处理length ≤ 0的情况（读取全部文件）
 	var actualStart, actualLength int64
@@ -63,7 +63,7 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 		if start < 0 {
 			return "", fmt.Errorf("start不能小于0（length>0时）")
 		}
-		split = true
+		//split = true
 		actualStart = start
 		actualLength = length
 		logger.Info("读取指定范围文件",
@@ -88,8 +88,10 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 	}
 
 	// 5. 构造本地输出文件名
-	localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
-	localFilePath := filepath.Join(localDir, localFileName)
+	//localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
+	localFilePath := filepath.Join(localDir, newFilename)
+
+	localFileName := newFilename
 
 	// 6. 计算dd命令参数（skip=跳过的块数，count=读取的块数）
 	skip := actualStart / bsBytes                   // 定位到起始位置需要跳过的块数
@@ -189,7 +191,7 @@ func SSHDDReadRangeChunk(ctx context.Context, cfg util.SSHConfig, remoteDir, fil
 //
 //	chunkSize: 每个子分片的大小（字节，传0使用默认100MB）
 //	concurrency: 并发数（传0使用默认8）
-func SSHDDReadRangeConcurrent(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, localDir string,
+func SSHDDReadRangeConcurrent(ctx context.Context, cfg util.SSHConfig, remoteDir, filename, newFilename, localDir string,
 	start, length, chunkSize int64, concurrency int, bs string, pre string, logger *slog.Logger) (string, error) {
 
 	// 1. 初始化默认值
@@ -205,8 +207,8 @@ func SSHDDReadRangeConcurrent(ctx context.Context, cfg util.SSHConfig, remoteDir
 		actualStart   int64
 		actualLength  int64
 		totalFileSize int64
-		split         bool
-		err           error
+		//split         bool
+		err error
 	)
 
 	// 获取远端文件总大小
@@ -262,13 +264,15 @@ func SSHDDReadRangeConcurrent(ctx context.Context, cfg util.SSHConfig, remoteDir
 	// 3. 如果读取长度≤分片大小，直接使用单分片读取（复用原有函数）
 	if actualLength <= chunkSize {
 		logger.Info("读取长度小于等于分片大小，使用单分片读取", slog.String("pre", pre))
-		return SSHDDReadRangeChunk(ctx, cfg, remoteDir, filename, localDir,
+		return SSHDDReadRangeChunk(ctx, cfg, remoteDir, filename, newFilename, localDir,
 			actualStart, actualLength, bs, pre, logger)
 	}
 
 	// 4. 构造本地文件名（复用原有逻辑）
-	localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
-	localFilePath := filepath.Join(localDir, localFileName)
+	//localFileName := buildLocalFileName(filename, actualStart, actualLength, split)
+	localFilePath := filepath.Join(localDir, newFilename)
+
+	localFileName := newFilename
 
 	// 5. 创建本地文件并预分配空间
 	localFile, err := os.Create(localFilePath)

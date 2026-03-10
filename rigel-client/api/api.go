@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	HeaderFileName = "X-File-Name" // 通过 Header 传文件名
+	FileName       = "X-File-Name" // 通过 Header 传文件名
+	NewFileName    = "X-New-File-Name"
 	DataSourceType = "X-Data-Source-Type"
 	DataDestType   = "X-Data-Dest-Type"
 	RoutingURL     = "/api/v1/routing"
@@ -44,35 +45,35 @@ type ApiResponse struct {
 	Data interface{} `json:"data"` // 业务数据
 }
 
-func RedirectV1Handler(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		fileName := c.GetHeader(HeaderFileName)
-		if fileName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name header"})
-			return
-		}
-
-		hops := c.GetHeader("X-Hops") // "34.69.185.247:8090,136.116.114.219:8080"
-		if hops == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-Hops header"})
-			return
-		}
-
-		localFilePath := LocalBaseDir + fileName
-
-		if err := upload.UploadToGCSbyReDirectHttpsV1(localFilePath, BucketName, fileName, CredFile,
-			hops, c.Request.Header, logger); err != nil {
-			logger.Error("ReDirect HTTPS upload failed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "redirect upload success",
-			"file_name": fileName,
-		})
-	}
-}
+//func RedirectV1Handler(logger *slog.Logger) gin.HandlerFunc {
+//	return func(c *gin.Context) {
+//		fileName := c.GetHeader(HeaderFileName)
+//		if fileName == "" {
+//			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name header"})
+//			return
+//		}
+//
+//		hops := c.GetHeader("X-Hops") // "34.69.185.247:8090,136.116.114.219:8080"
+//		if hops == "" {
+//			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-Hops header"})
+//			return
+//		}
+//
+//		localFilePath := LocalBaseDir + fileName
+//
+//		if err := upload.UploadToGCSbyReDirectHttpsV1(localFilePath, BucketName, fileName, CredFile,
+//			hops, c.Request.Header, logger); err != nil {
+//			logger.Error("ReDirect HTTPS upload failed: %v", err)
+//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+//			return
+//		}
+//
+//		c.JSON(http.StatusOK, gin.H{
+//			"message":   "redirect upload success",
+//			"file_name": fileName,
+//		})
+//	}
+//}
 
 func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -81,7 +82,8 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("ClientUploadHandler", slog.String("pre", pre))
 
 		// 从 Header 获取文件名
-		fileName := c.GetHeader(HeaderFileName)
+		fileName := c.GetHeader(FileName)
+		newFileName := c.GetHeader(NewFileName)
 		sourceType := c.GetHeader(DataSourceType)
 		destType := c.GetHeader(DataDestType)
 
@@ -107,27 +109,25 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 			slog.String("sourceType", sourceType), slog.String("destType", destType))
 
 		ctx := context.Background()
-
 		if sourceType == GCPCLoud {
-			localFileName, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-				fileName, CredFileSource, 0, 0, pre, logger)
+			_, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
+				fileName, newFileName, CredFileSource, 0, 0, pre, logger)
 			if err != nil {
 				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			fileName = localFileName
 		} else if sourceType == RemoteDisk {
-			localFileName, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-				LocalBaseDir, 0, 0, "", pre, logger)
+			_, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
+				newFileName, LocalBaseDir, 0, 0, "", pre, logger)
 			if err != nil {
 				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			fileName = localFileName
 		}
 
+		fileName = newFileName
 		logger.Info("download objectName success", slog.String("pre", pre),
 			slog.String("objectName", fileName))
 
@@ -169,7 +169,8 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("ClientUploadHandler", slog.String("pre", pre))
 
 		// 从 Header 获取文件名
-		fileName := c.GetHeader(HeaderFileName)
+		fileName := c.GetHeader(FileName)
+		newFileName := c.GetHeader(NewFileName)
 		sourceType := c.GetHeader(DataSourceType)
 		destType := c.GetHeader(DataDestType)
 
@@ -197,25 +198,24 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		ctx := context.Background()
 
 		if sourceType == GCPCLoud {
-			localFileName, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-				fileName, CredFileSource, 0, 0, pre, logger)
+			_, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
+				fileName, newFileName, CredFileSource, 0, 0, pre, logger)
 			if err != nil {
 				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			fileName = localFileName
 		} else if sourceType == RemoteDisk {
-			localFileName, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-				LocalBaseDir, 0, 0, "", pre, logger)
+			_, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
+				newFileName, LocalBaseDir, 0, 0, "", pre, logger)
 			if err != nil {
 				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			fileName = localFileName
 		}
 
+		fileName = newFileName
 		logger.Info("download objectName success", slog.String("pre", pre),
 			slog.String("objectName", fileName))
 
@@ -369,10 +369,9 @@ func V1Upload(logger *slog.Logger) gin.HandlerFunc {
 			return
 		}
 
-		fileName := c.GetHeader(HeaderFileName)
-		sourceType := c.GetHeader(DataSourceType)
+		fileName := c.GetHeader(FileName)
 		if fileName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name or X-Data-Source-Type header"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing X-File-Name header"})
 			return
 		}
 
@@ -398,7 +397,7 @@ func V1Upload(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		bReq.Header.Set("Content-Type", "application/json")
-		bReq.Header.Set(HeaderFileName, fileName)
+		bReq.Header.Set(FileName, fileName)
 		bReq.Header.Set("X-Client-IP", clientIP)
 		bReq.Header.Set("X-User-Name", username)
 
@@ -451,32 +450,6 @@ func V1Upload(logger *slog.Logger) gin.HandlerFunc {
 			})
 			return
 		}
-
-		ctx := context.Background()
-
-		//download
-		if sourceType == "gcp-cloud" {
-			localFileName, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-				fileName, CredFileSource, 0, 0, pre, logger)
-			if err != nil {
-				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			fileName = localFileName
-		} else if sourceType == "remote-disk" {
-			localFileName, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-				LocalBaseDir, 0, 0, "", pre, logger)
-			if err != nil {
-				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-			fileName = localFileName
-		}
-
-		logger.Info("download objectName success", slog.String("pre", pre),
-			slog.String("objectName", fileName))
 
 		//local disk
 		localFilePath := LocalBaseDir + fileName

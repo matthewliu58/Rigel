@@ -19,24 +19,26 @@ import (
 //
 //	start: 读取起始字节（从0开始，完整下载传0）
 //	length: 读取字节长度（完整下载传-1，分片读取传具体值如10*1024*1024*1024）
-func DownloadFromGCSbyClient(ctx context.Context, LocalBaseDir, bucketName, objectName, credFile string,
+func DownloadFromGCSbyClient(ctx context.Context, LocalBaseDir, bucketName, objectName, newFileName, credFile string,
 	start, length int64, pre string, logger *slog.Logger) (string, error) {
 
-	split := false
+	//split := false
 
 	// 日志区分完整下载/分片读取
 	if length <= 0 {
-		logger.Info("Downloading full file from GCS current bucket using client library", slog.String("pre", pre),
+		logger.Info("Downloading full file from GCS current bucket using client library",
+			slog.String("pre", pre), slog.String("objectName", objectName),
 			slog.String("objectName", objectName), slog.String("LocalBaseDir", LocalBaseDir))
 	} else {
-		logger.Info("Downloading file range from GCS current bucket using client library", slog.String("pre", pre),
-			slog.String("objectName", objectName), slog.String("LocalBaseDir", LocalBaseDir),
+		logger.Info("Downloading file range from GCS current bucket using client library",
+			slog.String("pre", pre), slog.String("objectName", objectName),
+			slog.String("newFileName", newFileName), slog.String("LocalBaseDir", LocalBaseDir),
 			slog.Int64("start_byte", start), slog.Int64("length_byte", length))
-		split = true
+		//split = true
 	}
 
-	objectName = buildLocalFileName(objectName, start, length, split)
-	localFilePath := filepath.Join(LocalBaseDir, objectName)
+	//objectName = buildLocalFileName(objectName, start, length, split)
+	localFilePath := filepath.Join(LocalBaseDir, newFileName)
 
 	// 设置凭证
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)

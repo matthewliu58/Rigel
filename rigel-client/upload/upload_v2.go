@@ -79,7 +79,7 @@ func UploadToGCSbyReDirectHttpsV2(uploadInfo UploadFileInfo, routingInfo util.Ro
 		return err
 	}
 	size := fi.Size()
-	_ = split.SplitFile(size, fileName, chunks, pre, logger)
+	_ = split.SplitFilebyRange(size, 0, -1, fileName, chunks, pre, logger)
 
 	//启动定时重传 & check传输完毕
 	events := make(chan ChunkEvent, 100)

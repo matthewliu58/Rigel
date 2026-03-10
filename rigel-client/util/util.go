@@ -1,11 +1,13 @@
 package util
 
 import (
+	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"log/slog"
 	"math/rand"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -131,6 +133,95 @@ func GetRemoteFileSize(ctx context.Context, cfg SSHConfig, remoteDir, filename s
 	}
 
 	return fileSize, nil
+}
+
+// GetGCSObjectSize 获取 GCS 上指定 Object 的文件大小（字节）
+// 参数说明：
+//
+//	ctx: 上下文（用于控制超时/取消）
+//	bucketName: GCS Bucket 名称
+//	objectName: GCS Object 名称（文件路径）
+//	credFile: GCS 凭证文件路径（如 /path/to/cred.json）
+//	pre: 日志前缀（用于追踪请求）
+//	logger: 日志对象
+//
+// 返回值：
+//
+//	int64: Object 大小（字节）
+//	error: 错误信息（获取失败时返回）
+func GetGCSObjectSize(ctx context.Context, bucketName, objectName, credFile, pre string, logger *slog.Logger) (int64, error) {
+	// 1. 入参校验
+	if bucketName == "" {
+		return 0, fmt.Errorf("bucketName 不能为空")
+	}
+	if objectName == "" {
+		return 0, fmt.Errorf("objectName 不能为空")
+	}
+	if credFile == "" {
+		return 0, fmt.Errorf("credFile 不能为空")
+	}
+
+	// 2. 设置 GCS 凭证环境变量
+	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
+
+	// 3. 创建 GCS 客户端（带超时控制）
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second) // 10秒超时，避免卡住
+	defer cancel()
+
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		logger.Error("创建 GCS 客户端失败", slog.String("pre", pre),
+			slog.String("bucketName", bucketName),
+			slog.String("objectName", objectName),
+			slog.Any("err", err))
+		return 0, fmt.Errorf("storage.NewClient failed: %w", err)
+	}
+	defer client.Close() // 确保客户端关闭，释放资源
+
+	// 4. 获取 Bucket 和 Object 实例
+	bucket := client.Bucket(bucketName)
+	obj := bucket.Object(objectName)
+
+	// 5. 获取 Object 元数据（核心：从 Attrs 中读取 Size）
+	attrs, err := obj.Attrs(ctx)
+	if err != nil {
+		logger.Error("获取 GCS Object 元数据失败", slog.String("pre", pre),
+			slog.String("bucketName", bucketName),
+			slog.String("objectName", objectName),
+			slog.Any("err", err))
+		// 区分常见错误类型，返回更友好的提示
+		if err == storage.ErrObjectNotExist {
+			return 0, fmt.Errorf("object %s/%s 不存在: %w", bucketName, objectName, err)
+		}
+		return 0, fmt.Errorf("obj.Attrs failed: %w", err)
+	}
+
+	// 6. 日志记录结果
+	logger.Info("成功获取 GCS Object 大小", slog.String("pre", pre),
+		slog.String("bucketName", bucketName),
+		slog.String("objectName", objectName),
+		slog.Int64("file_size_bytes", attrs.Size),
+		slog.String("file_size_human", formatBytes(attrs.Size))) // 可选：格式化易读大小
+
+	// 7. 返回文件大小（字节）
+	return attrs.Size, nil
+}
+
+// ------------------------------ 辅助函数：字节数格式化（可选） ------------------------------
+// formatBytes 将字节数转换为易读的字符串（如 1024 → 1KB，1048576 → 1MB）
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB",
+		float64(bytes)/float64(div),
+		"KMGTPE"[exp])
 }
 
 // autoSelectBs 根据读取的总大小自动选择最优块大小
