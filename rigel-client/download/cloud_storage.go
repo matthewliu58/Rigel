@@ -112,7 +112,7 @@ func DownloadFromGCSbyClient(ctx context.Context, LocalBaseDir, bucketName, obje
 //	concurrency: 并发数（传0则使用默认8）
 //	pre: 日志前缀
 //	logger: 日志对象
-func DownloadFromGCSConcurrent(ctx context.Context, LocalBaseDir, bucketName, objectName, credFile string,
+func DownloadFromGCSConcurrent(ctx context.Context, LocalBaseDir, bucketName, objectName, newFilename, credFile string,
 	start, length, chunkSize int64, concurrency int, pre string, logger *slog.Logger) (string, error) {
 
 	logger.Info("Downloading file from GCS bucket using concurrent chunks", slog.String("pre", pre),
@@ -125,7 +125,7 @@ func DownloadFromGCSConcurrent(ctx context.Context, LocalBaseDir, bucketName, ob
 		concurrency = 8
 	}
 
-	split := false
+	//split := false
 
 	// 日志区分完整下载/分片读取
 	if length <= 0 {
@@ -135,11 +135,11 @@ func DownloadFromGCSConcurrent(ctx context.Context, LocalBaseDir, bucketName, ob
 		logger.Info("Downloading file range from GCS bucket using client library", slog.String("pre", pre),
 			slog.String("objectName", objectName), slog.String("LocalBaseDir", LocalBaseDir),
 			slog.Int64("start_byte", start), slog.Int64("length_byte", length))
-		split = true
+		//split = true
 	}
 
-	objectName = buildLocalFileName(objectName, start, length, split)
-	localFilePath := filepath.Join(LocalBaseDir, objectName)
+	//objectName = buildLocalFileName(objectName, start, length, split)
+	localFilePath := filepath.Join(LocalBaseDir, newFilename)
 
 	// 设置 GCS 凭证
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
@@ -215,7 +215,7 @@ func DownloadFromGCSConcurrent(ctx context.Context, LocalBaseDir, bucketName, ob
 	// 如果下载大小小于等于分片大小，直接单块下载
 	if downloadSize <= chunkSize {
 		logger.Info("Download size smaller than chunk size, use single range download", slog.String("pre", pre))
-		return DownloadFromGCSbyClient(ctx, localFilePath, bucketName, objectName, credFile,
+		return DownloadFromGCSbyClient(ctx, localFilePath, bucketName, objectName, newFilename, credFile,
 			downloadStart, downloadSize, pre, logger)
 	}
 
