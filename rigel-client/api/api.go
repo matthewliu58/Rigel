@@ -16,6 +16,8 @@ import (
 
 const (
 	FileName       = "X-File-Name" // 通过 Header 传文件名
+	FileStart      = "X-File-Start"
+	FileLength     = "X-File-Length"
 	NewFileName    = "X-New-File-Name"
 	DataSourceType = "X-Data-Source-Type"
 	DataDestType   = "X-Data-Dest-Type"
@@ -83,6 +85,8 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		// 从 Header 获取文件名
 		fileName := c.GetHeader(FileName)
+		//fileStart := c.GetHeader(FileStart)   // "0"
+		//fileLength := c.GetHeader(FileLength) // "100"
 		newFileName := c.GetHeader(NewFileName)
 		sourceType := c.GetHeader(DataSourceType)
 		destType := c.GetHeader(DataDestType)
@@ -162,6 +166,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
+// todo 0 x-range 1 file split;2 parallel transfer;3 compose; 4 response
 func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
