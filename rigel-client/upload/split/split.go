@@ -3,14 +3,9 @@ package split
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"rigel-client/util"
 	"strconv"
 	"time"
-)
-
-const (
-	chunkSize = 8 * 1024 * 1024 // 8MB
 )
 
 type ChunkState struct {
@@ -23,20 +18,16 @@ type ChunkState struct {
 	Acked      int
 }
 
-func SplitFile(path, fileName string, chunks *util.SafeMap,
+func SplitFile(size int64, fileName string, chunks *util.SafeMap,
 	pre string, logger *slog.Logger) error {
-
-	fi, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
 
 	var (
 		offset int64
 		index  int
 	)
 
-	size := fi.Size()
+	chunkSize := util.AutoSelectChunkSize(size)
+
 	for offset < size {
 		partSize := int64(chunkSize)
 		if offset+partSize > size {

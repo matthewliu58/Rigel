@@ -72,7 +72,7 @@ func RedirectV1Handler(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
-func ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
+func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		pre := util.GenerateRandomLetters(5)
@@ -251,7 +251,7 @@ func ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 //	}
 //}
 
-func Upload(logger *slog.Logger) gin.HandlerFunc {
+func V1Upload(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		pre := util.GenerateRandomLetters(5)
