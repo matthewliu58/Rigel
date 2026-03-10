@@ -86,8 +86,7 @@ func ComposeTree(
 			_ = bkt.Object(tmp).Delete(ctx)
 		}
 	}
-
-	// ✅ 删除所有原始分片
+	
 	for _, p := range parts {
 		_ = bkt.Object(p).Delete(ctx)
 	}

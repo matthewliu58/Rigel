@@ -35,14 +35,14 @@ func ChunkUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("ChunkUploadHandler start", slog.String("pre", pre))
 
 		// 1. 获取Header参数
-		finalFileName := c.GetHeader(HeaderFileName)
+		finalFileName := c.GetHeader(FileName)
 		chunkName := c.GetHeader(HeaderChunkName)
 		if finalFileName == "" || chunkName == "" {
 			logger.Error("ChunkUploadHandler missing header", slog.String("pre", pre),
 				slog.String("finalFileName", finalFileName),
 				slog.String("chunkName", chunkName))
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Missing required headers: " + HeaderFileName + "/" + HeaderChunkName,
+				"error": "Missing required headers: " + FileName + "/" + HeaderChunkName,
 			})
 			return
 		}
@@ -95,14 +95,14 @@ func ChunkMergeHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("ChunkMergeHandler start", slog.String("pre", pre))
 
 		// 1. 获取Header参数
-		finalFileName := c.GetHeader(HeaderFileName)
+		finalFileName := c.GetHeader(FileName)
 		chunkNamesStr := c.GetHeader(HeaderChunkNames)
 		if finalFileName == "" || chunkNamesStr == "" {
 			logger.Error("ChunkMergeHandler missing header", slog.String("pre", pre),
 				slog.String("finalFileName", finalFileName),
 				slog.String("chunkNamesStr", chunkNamesStr))
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Missing required headers: " + HeaderFileName + "/" + HeaderChunkNames,
+				"error": "Missing required headers: " + FileName + "/" + HeaderChunkNames,
 			})
 			return
 		}

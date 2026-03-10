@@ -18,43 +18,6 @@ type ChunkState struct {
 	Acked      int
 }
 
-//func SplitFile(size int64, fileName string, chunks *util.SafeMap,
-//	pre string, logger *slog.Logger) error {
-//
-//	var (
-//		offset int64
-//		index  int
-//	)
-//
-//	chunkSize := util.AutoSelectChunkSize(size)
-//
-//	for offset < size {
-//		partSize := int64(chunkSize)
-//		if offset+partSize > size {
-//			partSize = size - offset
-//		}
-//
-//		partName := fmt.Sprintf("%s.part.%05d", fileName, index)
-//
-//		chunks.Set(strconv.Itoa(index), &ChunkState{
-//			Index:      strconv.Itoa(index),
-//			FileName:   fileName,
-//			ObjectName: partName,
-//			Offset:     offset,
-//			Size:       partSize,
-//			Acked:      0,
-//		})
-//
-//		offset += partSize
-//		index++
-//
-//		logger.Info("SplitFile", slog.String("pre", pre),
-//			"partName", partName, "offset", offset, "size", size)
-//	}
-//
-//	return nil
-//}
-
 // SplitFile 支持指定范围分片（length>0）或全文件分片（length≤0）
 // 参数说明：
 //
@@ -156,3 +119,40 @@ func SplitFilebyRange(size int64, start, length int64, fileName string, chunks *
 
 	return nil
 }
+
+//func SplitFile(size int64, fileName string, chunks *util.SafeMap,
+//	pre string, logger *slog.Logger) error {
+//
+//	var (
+//		offset int64
+//		index  int
+//	)
+//
+//	chunkSize := util.AutoSelectChunkSize(size)
+//
+//	for offset < size {
+//		partSize := int64(chunkSize)
+//		if offset+partSize > size {
+//			partSize = size - offset
+//		}
+//
+//		partName := fmt.Sprintf("%s.part.%05d", fileName, index)
+//
+//		chunks.Set(strconv.Itoa(index), &ChunkState{
+//			Index:      strconv.Itoa(index),
+//			FileName:   fileName,
+//			ObjectName: partName,
+//			Offset:     offset,
+//			Size:       partSize,
+//			Acked:      0,
+//		})
+//
+//		offset += partSize
+//		index++
+//
+//		logger.Info("SplitFile", slog.String("pre", pre),
+//			"partName", partName, "offset", offset, "size", size)
+//	}
+//
+//	return nil
+//}
