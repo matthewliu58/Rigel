@@ -167,7 +167,7 @@ func NewWorkerPool_(
 	p := &WorkerPool_{TaskCh: make(chan ChunkTask_, queueSize)}
 	logger.Info("NewWorkerPool_", slog.String("pre", pre), "queueSize", queueSize)
 
-	workerNum := len(routingInfo.Routing)
+	workerNum := len(routingInfo.Routing) //todo 并发数可以增加 2-3倍
 	if workerNum <= 0 {
 		for i := 0; i < MaxConcurrency; i++ {
 			go func(workerID int) {
@@ -351,99 +351,4 @@ func StartChunkSubmitLoop_(
 			break
 		}
 	}
-}
-
-func UploadChunkDirect(task ChunkTask_, hops string, rateLimiter *rate.Limiter, pre string, logger *slog.Logger) error {
-
-	//	ctx := task.Ctx
-	//
-	//	if sourceType == GCPCLoud {
-	//		_, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-	//			fileName, newFileName, CredFileSource, 0, 0, pre, logger)
-	//		if err != nil {
-	//			logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
-	//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	//			return
-	//		}
-	//	} else if sourceType == RemoteDisk {
-	//		_, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-	//			newFileName, LocalBaseDir, 0, 0, "", pre, logger)
-	//		if err != nil {
-	//			logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
-	//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	//			return
-	//		}
-	//	}
-	//
-	//	fileName = newFileName
-	//	logger.Info("download objectName success", slog.String("pre", pre),
-	//		slog.String("objectName", fileName))
-	//
-	//	if destType == GCPCLoud {
-	//		if err := upload.UploadToGCSbyClient(ctx, LocalBaseDir, BucketName, fileName, CredFile, logger); err != nil {
-	//			logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
-	//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	//			return
-	//		}
-	//	} else if destType == RemoteDisk {
-	//		req := upload.ChunkUploadRequest{
-	//			ServerURL:     FileSys,
-	//			FinalFileName: fileName,
-	//			ChunkName:     fileName,
-	//			LocalBaseDir:  LocalBaseDir,
-	//		}
-	//		if _, err := upload.UploadFileChunk(req, pre, logger); err != nil {
-	//			logger.Error("ChunkUploadHandler failed", slog.String("pre", pre), slog.Any("err", err))
-	//			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	//			return
-	//		}
-	//	}
-	//
-	//	logger.Info("ClientUploadHandler success", slog.String("pre", pre))
-	//
-	//	c.JSON(http.StatusOK, gin.H{
-	//		"message":    "upload success",
-	//		"file_name":  fileName,
-	//		"bucket":     BucketName,
-	//		"objectName": fileName,
-	//	})
-	//
-	//	// 1. 读取分块数据
-	//	var reader io.Reader
-	//	var err error
-	//	switch task.SourceType {
-	//	case GCPCLoud:
-	//		_, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-	//			fileName, newFileName, CredFileSource, 0, 0, pre, logger)
-	//	case RemoteDisk:
-	//		reader, err = download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, task.FileName,
-	//			"", LocalBaseDir, task.Start, task.Length, "", task.Pre, logger)
-	//	default:
-	//		return "", fmt.Errorf("unsupported source type: %s", task.SourceType)
-	//	}
-	//	if err != nil {
-	//		return "", fmt.Errorf("read part %d failed: %v", task.PartNum, err)
-	//	}
-	//
-	//	// 2. 上传分块到目标端
-	//	var partID string
-	//	switch task.SourceType { // 注意：这里实际应使用destType，保持和原逻辑一致
-	//	case GCPCLoud:
-	//		partID, err = upload.UploadToGCSbyClientChunk(ctx, LocalBaseDir, BucketName, task.FileName, CredFile, task.PartNum, reader, task.Length, logger)
-	//	case RemoteDisk:
-	//		req := upload.ChunkUploadRequest{
-	//			ServerURL:     FileSys,
-	//			FinalFileName: task.FileName,
-	//			ChunkName:     fmt.Sprintf("%s.part%d", task.FileName, task.PartNum),
-	//			LocalBaseDir:  LocalBaseDir,
-	//		}
-	//		partID, err = upload.UploadFileChunk(req, task.Pre, logger)
-	//	}
-	//	if err != nil {
-	//		return "", fmt.Errorf("upload part %d failed: %v", task.PartNum, err)
-	//	}
-	//
-	//	return partID, nil
-	//}
-	return nil
 }

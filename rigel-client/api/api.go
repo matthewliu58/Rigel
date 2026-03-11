@@ -12,10 +12,9 @@ import (
 	"rigel-client/config"
 	"rigel-client/download"
 	"rigel-client/upload"
-	"rigel-client/upload/split"
+	upload2 "rigel-client/upload/upload"
 	"rigel-client/util"
 	"strconv"
-	"time"
 )
 
 const (
@@ -102,19 +101,19 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 			slog.String("objectName", fileName))
 
 		if destType == upload.GCPCLoud {
-			if err := upload.UploadToGCSbyClient(ctx, LocalBaseDir, BucketName, fileName, CredFile, logger); err != nil {
+			if err := upload2.UploadToGCSbyClient(ctx, LocalBaseDir, BucketName, fileName, CredFile, logger); err != nil {
 				logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		} else if destType == upload.RemoteDisk {
-			req := upload.ChunkUploadRequest{
+			req := upload2.ChunkUploadRequest{
 				ServerURL:     FileSys.Upload,
 				FinalFileName: fileName,
 				ChunkName:     fileName,
 				LocalBaseDir:  LocalBaseDir,
 			}
-			if _, err := upload.UploadFileChunk(req, pre, logger); err != nil {
+			if _, err := upload2.UploadFileChunk(req, pre, logger); err != nil {
 				logger.Error("ChunkUploadHandler failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -202,33 +201,6 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 			slog.Int64("fileStart", fileStart), slog.Int64("fileLength", fileLength),
 			slog.String("sourceType", sourceType), slog.String("destType", destType))
 
-		// 3. 获取文件真实长度
-		ctx := context.Background()
-		var fileSize int64
-		switch sourceType {
-		case download.GCPCLoud:
-			fileSize, err = download.GetGCSObjectSize(ctx, BucketNameSource, fileName, CredFileSource, pre, logger)
-		case download.RemoteDisk:
-			fileSize, err = download.GetRemoteFileSize(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName, pre, logger)
-		case download.LocalDisk:
-			fileSize, err = download.GetLocalFileSize(ctx, LocalBaseDir, fileName, pre, logger)
-		}
-		if err != nil {
-			logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		logger.Info("Get file size success", slog.String("pre", pre), slog.Int64("size", fileSize))
-
-		// 4. 文件分块
-		chunks := util.NewSafeMap()
-		if err := split.SplitFilebyRange(fileSize, fileStart, fileLength, fileName,
-			newFileName, chunks, pre, logger); err != nil {
-			logger.Error("Split file failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
 		uploadInfo := upload.UploadInfo{
 			File: upload.FileInfo{
 				Start:       fileStart,   // 分块起始偏移（根据实际需求填写，如0、1048576等）
@@ -263,37 +235,11 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		logger.Info("UploadInfo", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
 
-		//启动定时重传 & check传输完毕
-		done := make(chan struct{})
-		events := make(chan upload.ChunkEvent, 100)
-		interval := 10 * time.Duration(time.Second)
-		expire := 120 * time.Duration(time.Second)
-		upload.StartChunkTimeoutChecker_(ctx, chunks, interval, expire, events, pre, logger)
-
-		//启动消费者 默认一个http并发度
-		workerPool := upload.NewWorkerPool_(upload.QueueBufferSize,
-			util.RoutingInfo{}, upload.UploadChunkDirect, pre, logger)
-
-		//events 消费
-		go upload.ChunkEventLoop_(ctx, chunks, workerPool, uploadInfo, events, done, pre, logger)
-
-		// 4. 启动分片上传
-		go upload.StartChunkSubmitLoop_(ctx, chunks, workerPool, uploadInfo,
-			false, nil, pre, logger)
-
-		// 5分钟超时定时器
-		timeout := 5 * time.Minute
-		select {
-		case <-done:
-			logger.Info("Function 正常完成", slog.String("per", pre), slog.String("newFileName", newFileName))
-		case <-time.After(timeout):
-			logger.Warn("等待 5 分钟超时，退出等待", slog.String("per", pre),
-				slog.String("newFileName", newFileName))
-			msg := fmt.Errorf("等待 5 分钟超时，退出等待, newFileName: %s", newFileName)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+		if err := upload.UploadDirect(uploadInfo, pre, logger); err != nil {
+			logger.Error("UploadDirect failed", slog.String("pre", pre), slog.Any("err", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
-
-		logger.Info("主程序执行完毕", slog.String("per", pre), slog.String("newFileName", newFileName))
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":    "upload success",
@@ -419,7 +365,7 @@ func V1Upload(logger *slog.Logger) gin.HandlerFunc {
 			CredFile:      CredFile,
 		}
 
-		if err := upload.UploadToGCSbyReDirectHttpsV2(uploadInfo, routingInfo, pre, logger); err != nil {
+		if err := upload.UploadToGCSbyReDirectImp(uploadInfo, routingInfo, pre, logger); err != nil {
 			logger.Error("ReDirect v2 HTTPS upload failed", slog.String("pre", pre), slog.Any("err", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

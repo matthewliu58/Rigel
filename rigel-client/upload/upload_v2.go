@@ -49,7 +49,7 @@ type UploadFileInfo struct {
 }
 
 // 分片+限流+ack+compose 功能的upload
-func UploadToGCSbyReDirectHttpsV2(uploadInfo UploadFileInfo, routingInfo util.RoutingInfo,
+func UploadToGCSbyReDirectImp(uploadInfo UploadFileInfo, routingInfo util.RoutingInfo,
 	pre string, logger *slog.Logger) error {
 
 	logger.Info("UploadToGCSbyReDirectHttpsV2", slog.String("pre", pre),
