@@ -8,87 +8,163 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
-// DownloadFromGCSbyClient 从 GCS bucket 下载文件（支持完整下载/分片读取）
+// DownloadFromGCSbyClient 从GCS读取数据（支持内存流式/本地落盘两种模式）
 // 参数说明：
 //
-//	start: 读取起始字节（从0开始，完整下载传0）
-//	length: 读取字节长度（完整下载传-1，分片读取传具体值如10*1024*1024*1024）
-func DownloadFromGCSbyClient(ctx context.Context, LocalBaseDir, bucketName, objectName, newFileName, credFile string,
-	start, length int64, pre string, logger *slog.Logger) (string, error) {
-
-	//split := false
-
-	// 日志区分完整下载/分片读取
-	if length <= 0 {
-		logger.Info("Downloading full file from GCS current bucket using client library",
-			slog.String("pre", pre), slog.String("objectName", objectName),
-			slog.String("objectName", objectName), slog.String("LocalBaseDir", LocalBaseDir))
+//	inMemory: true=返回流式Reader（不落盘），false=落盘到本地文件
+//	其他参数保持原有含义
+func DownloadFromGCSbyClient(
+	ctx context.Context,
+	LocalBaseDir, bucketName, objectName, newFileName, credFile string,
+	start, length int64,
+	inMemory bool, // 新增：true=不落盘返回Reader，false=落盘
+	pre string,
+	logger *slog.Logger,
+) (io.ReadCloser, error) { // 返回io.ReadCloser（兼容两种模式）
+	// 日志区分模式+完整/分片读取
+	if inMemory {
+		if length <= 0 {
+			logger.Info("Reading full file from GCS (in-memory mode, no disk write)",
+				slog.String("pre", pre),
+				slog.String("bucketName", bucketName),
+				slog.String("objectName", objectName))
+		} else {
+			logger.Info("Reading file range from GCS (in-memory mode, no disk write)",
+				slog.String("pre", pre),
+				slog.String("bucketName", bucketName),
+				slog.String("objectName", objectName),
+				slog.Int64("start_byte", start),
+				slog.Int64("length_byte", length))
+		}
 	} else {
-		logger.Info("Downloading file range from GCS current bucket using client library",
-			slog.String("pre", pre), slog.String("objectName", objectName),
-			slog.String("newFileName", newFileName), slog.String("LocalBaseDir", LocalBaseDir),
-			slog.Int64("start_byte", start), slog.Int64("length_byte", length))
-		//split = true
+		if length <= 0 {
+			logger.Info("Downloading full file from GCS (disk mode)",
+				slog.String("pre", pre),
+				slog.String("bucketName", bucketName),
+				slog.String("objectName", objectName),
+				slog.String("LocalBaseDir", LocalBaseDir))
+		} else {
+			logger.Info("Downloading file range from GCS (disk mode)",
+				slog.String("pre", pre),
+				slog.String("bucketName", bucketName),
+				slog.String("objectName", objectName),
+				slog.String("newFileName", newFileName),
+				slog.String("LocalBaseDir", LocalBaseDir),
+				slog.Int64("start_byte", start),
+				slog.Int64("length_byte", length))
+		}
 	}
 
-	//objectName = buildLocalFileName(objectName, start, length, split)
-	localFilePath := filepath.Join(LocalBaseDir, newFileName)
-
-	// 设置凭证
+	// 设置GCS凭证
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
 
-	// 创建客户端
+	// 创建GCS客户端
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return objectName, fmt.Errorf("failed to create storage client: %w", err)
+		return nil, fmt.Errorf("create storage client failed: %w", err)
 	}
-	defer client.Close()
 
-	// 获取 bucket 和 object
+	// 获取Bucket和Object
 	bucket := client.Bucket(bucketName)
 	obj := bucket.Object(objectName)
 
-	// 创建 reader（核心改动：支持范围读取）
+	// 创建带超时的上下文
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
 
+	// 创建Reader（完整/分片读取）
 	var rc *storage.Reader
 	if length <= 0 {
-		// 完整下载：使用原 NewReader
 		rc, err = obj.NewReader(ctx)
 	} else {
-		// 分片读取：使用 NewRangeReader（start=起始字节，length=读取长度）
 		rc, err = obj.NewRangeReader(ctx, start, length)
 	}
 	if err != nil {
-		return objectName, fmt.Errorf("failed to create object reader: %w", err)
+		cancel()
+		client.Close()
+		return nil, fmt.Errorf("create object reader failed: %w", err)
 	}
-	defer rc.Close()
 
-	// 创建本地文件（分片读取建议文件名带范围，如 bigfile_0_10GB.bin）
+	// 模式1：inMemory=true → 返回流式Reader（不落盘）
+	if inMemory {
+		return &gcsReaderWrapper{
+			Reader: rc,
+			cancel: cancel,
+			client: client,
+		}, nil
+	}
+
+	// 模式2：inMemory=false → 落盘到本地文件
+	defer func() {
+		rc.Close()
+		cancel()
+		client.Close()
+	}()
+
+	// 拼接本地文件路径
+	localFilePath := filepath.Join(LocalBaseDir, newFileName)
+	// 创建本地目录
+	if err := os.MkdirAll(LocalBaseDir, 0755); err != nil {
+		return nil, fmt.Errorf("create local dir failed: %w", err)
+	}
+	// 创建本地文件
 	f, err := os.Create(localFilePath)
 	if err != nil {
-		return objectName, fmt.Errorf("failed to create local file: %w", err)
+		return nil, fmt.Errorf("create local file failed: %w", err)
 	}
 	defer f.Close()
 
 	// 写入本地文件
 	if _, err := io.Copy(f, rc); err != nil {
-		return objectName, fmt.Errorf("failed to copy object to local file: %w", err)
+		return nil, fmt.Errorf("copy to local file failed: %w", err)
+	}
+
+	// 落盘模式返回本地文件的Reader（方便调用方后续读取）
+	localFileReader, err := os.Open(localFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("open local file failed: %w", err)
 	}
 
 	// 日志反馈结果
 	if length <= 0 {
-		logger.Info("Full file download success", slog.String("pre", pre),
-			slog.String("objectName", objectName), slog.String("localFilePath", localFilePath))
+		logger.Info("Full file download success (disk mode)",
+			slog.String("pre", pre),
+			slog.String("objectName", objectName),
+			slog.String("localFilePath", localFilePath))
 	} else {
-		logger.Info("File range download success", slog.String("pre", pre),
-			slog.String("objectName", objectName), slog.String("localFilePath", localFilePath),
-			slog.Int64("start_byte", start), slog.Int64("length_byte", length))
+		logger.Info("File range download success (disk mode)",
+			slog.String("pre", pre),
+			slog.String("objectName", objectName),
+			slog.String("localFilePath", localFilePath),
+			slog.Int64("start_byte", start),
+			slog.Int64("length_byte", length))
 	}
 
-	return objectName, nil
+	return localFileReader, nil
+}
+
+// gcsReaderWrapper 封装 storage.Reader + 资源清理逻辑（内存模式用）
+type gcsReaderWrapper struct {
+	*storage.Reader
+	cancel context.CancelFunc
+	client *storage.Client
+}
+
+// Close 关闭所有关联资源（调用方必须调用）
+func (w *gcsReaderWrapper) Close() error {
+	var errStr []string
+	if err := w.Reader.Close(); err != nil {
+		errStr = append(errStr, fmt.Sprintf("reader close failed: %v", err))
+	}
+	w.cancel()
+	if err := w.client.Close(); err != nil {
+		errStr = append(errStr, fmt.Sprintf("client close failed: %v", err))
+	}
+	if len(errStr) > 0 {
+		return fmt.Errorf(strings.Join(errStr, "; "))
+	}
+	return nil
 }

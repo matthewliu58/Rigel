@@ -30,7 +30,7 @@ type ChunkState struct {
 //	pre: 日志前缀
 //	logger: 日志对象
 func SplitFilebyRange(size int64, start, length int64, fileName, newFileName string, chunks *util.SafeMap,
-	pre string, logger *slog.Logger) error {
+	pre string, logger *slog.Logger) (int64, error) {
 
 	// -------------------------- 1. 核心逻辑：处理 length ≤ 0 的全量分片 --------------------------
 	var (
@@ -52,10 +52,10 @@ func SplitFilebyRange(size int64, start, length int64, fileName, newFileName str
 
 	// -------------------------- 2. 范围合法性校验（兼容全量/指定范围） --------------------------
 	if rangeStart < 0 {
-		return fmt.Errorf("start 不能为负数（当前值：%d）", rangeStart)
+		return 0, fmt.Errorf("start 不能为负数（当前值：%d）", rangeStart)
 	}
 	if rangeStart >= size {
-		return fmt.Errorf("start(%d) 超出文件总大小(%d)，无数据可分片", rangeStart, size)
+		return 0, fmt.Errorf("start(%d) 超出文件总大小(%d)，无数据可分片", rangeStart, size)
 	}
 	// 修正结束位置（避免超出文件总大小）
 	if rangeEnd > size {
@@ -66,7 +66,7 @@ func SplitFilebyRange(size int64, start, length int64, fileName, newFileName str
 	// 校验有效分片长度（必须 > 0）
 	effectiveLength := rangeEnd - rangeStart
 	if effectiveLength <= 0 {
-		return fmt.Errorf("无有效分片数据（start=%d, end=%d, file_size=%d）", rangeStart, rangeEnd, size)
+		return 0, fmt.Errorf("无有效分片数据（start=%d, end=%d, file_size=%d）", rangeStart, rangeEnd, size)
 	}
 
 	// -------------------------- 3. 初始化分片变量 --------------------------
@@ -119,7 +119,7 @@ func SplitFilebyRange(size int64, start, length int64, fileName, newFileName str
 		"range_end", rangeEnd,
 		"effective_length", effectiveLength)
 
-	return nil
+	return chunkSize, nil
 }
 
 //func SplitFile(size int64, fileName string, chunks *util.SafeMap,

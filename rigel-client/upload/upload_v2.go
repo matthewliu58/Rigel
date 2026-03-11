@@ -69,7 +69,11 @@ func UploadToGCSbyReDirectImp(uploadInfo UploadFileInfo, routingInfo util.Routin
 		return err
 	}
 	size := fi.Size()
-	_ = split.SplitFilebyRange(size, 0, -1, fileName, fileName, chunks, pre, logger)
+	_, err = split.SplitFilebyRange(size, 0, -1, fileName, fileName, chunks, pre, logger)
+	if err != nil {
+		logger.Error("split.SplitFilebyRange failed", slog.String("pre", pre), slog.Any("err", err))
+		return err
+	}
 
 	//启动定时重传 & check传输完毕
 	events := make(chan ChunkEvent, 100)

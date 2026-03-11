@@ -159,7 +159,8 @@ func CollectExpiredChunks_(
 func NewWorkerPool_(
 	queueSize int,
 	routingInfo util.RoutingInfo,
-	handler func(ChunkTask_, string, *rate.Limiter, string, *slog.Logger) error,
+	handler func(ChunkTask_, string, *rate.Limiter, bool, string, *slog.Logger) error,
+	inMemory bool,
 	pre string,
 	logger *slog.Logger,
 ) *WorkerPool_ {
@@ -179,6 +180,7 @@ func NewWorkerPool_(
 						task,
 						"",
 						nil,
+						inMemory,
 						pre,
 						logger,
 					)
@@ -208,6 +210,7 @@ func NewWorkerPool_(
 						task,
 						pathInfo.Hops,
 						limiter,
+						inMemory,
 						pre,
 						logger,
 					)

@@ -79,21 +79,23 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		ctx := context.Background()
 		if sourceType == download.GCPCLoud {
-			_, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
-				fileName, newFileName, CredFileSource, 0, 0, pre, logger)
+			reader, err := download.DownloadFromGCSbyClient(ctx, LocalBaseDir, BucketNameSource,
+				fileName, newFileName, CredFileSource, 0, 0, false, pre, logger)
 			if err != nil {
 				logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			defer reader.Close()
 		} else if sourceType == download.RemoteDisk {
-			_, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
-				newFileName, LocalBaseDir, 0, 0, "", pre, logger)
+			reader, _, err := download.SSHDDReadRangeChunk(ctx, RemoteDiskSSHConfig, RemoteDiskDir, fileName,
+				newFileName, LocalBaseDir, 0, 0, "", false, pre, logger)
 			if err != nil {
 				logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+			defer reader.Close()
 		}
 
 		fileName = newFileName
@@ -101,7 +103,8 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 			slog.String("objectName", fileName))
 
 		if destType == upload.GCPCLoud {
-			if err := upload2.UploadToGCSbyClient(ctx, LocalBaseDir, BucketName, fileName, CredFile, logger); err != nil {
+			if err := upload2.UploadToGCSbyClient(ctx, LocalBaseDir, BucketName, fileName, CredFile,
+				false, nil, pre, logger); err != nil {
 				logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
@@ -113,7 +116,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 				ChunkName:     fileName,
 				LocalBaseDir:  LocalBaseDir,
 			}
-			if _, err := upload2.UploadFileChunk(req, pre, logger); err != nil {
+			if _, err := upload2.UploadFileChunk(req, false, nil, pre, logger); err != nil {
 				logger.Error("ChunkUploadHandler failed", slog.String("pre", pre), slog.Any("err", err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
