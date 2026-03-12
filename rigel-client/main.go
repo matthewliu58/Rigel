@@ -57,10 +57,10 @@ func main() {
 	router.Use(gin.Recovery())
 
 	//api.InitProxyUserRoutingRouter(router, RoutingURL, logger)
-	router.POST("/api/v1/upload", api.V1Upload(logger))
+	router.POST("/api/v1/proxy/upload", api.V1ProxyUploadHandler(logger))
 
 	// 上传接口
-	router.POST("/api/v1/client/upload", api.V1ClientUploadHandler(logger))
+	//router.POST("/api/v1/client/upload", api.V1ClientUploadHandler(logger))
 	router.POST("/api/v2/client/upload", api.V2ClientUploadHandler(logger))
 
 	// ========== 新增文件接收上传接口 ==========

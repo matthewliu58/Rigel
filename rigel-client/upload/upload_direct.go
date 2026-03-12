@@ -5,7 +5,6 @@ import (
 	"golang.org/x/time/rate"
 	"log/slog"
 	"rigel-client/upload/split"
-	upload2 "rigel-client/upload/upload"
 	"time"
 )
 
@@ -67,7 +66,7 @@ func UploadDirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, in
 	source_ := task.Source
 	file := task.File
 	dest := task.Dest
-	
+
 	reader, err := GetTransferReader(ctx, source_, file, task.LocalBaseDir, task.ObjectName, inMemory, pre, logger)
 	if err != nil {
 		return err
@@ -82,19 +81,19 @@ func UploadDirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, in
 
 	// --------------- 第三步：上传到目标端 ---------------
 	if dest.DestType == GCPCLoud {
-		if err := upload2.UploadToGCSbyClient(ctx, task.LocalBaseDir, dest.BucketName,
+		if err := UploadToGCSbyClient(ctx, task.LocalBaseDir, dest.BucketName,
 			task.ObjectName, dest.CredFile, inMemory, reader, pre, logger); err != nil {
 			logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
 			return err
 		}
 	} else if dest.DestType == RemoteDisk {
-		req := upload2.ChunkUploadRequest{
+		req := ChunkUploadRequest{
 			ServerURL:     dest.FileSys.Upload,
 			FinalFileName: task.ObjectName,
 			ChunkName:     task.ObjectName,
 			LocalBaseDir:  task.LocalBaseDir,
 		}
-		if _, err := upload2.UploadFileChunk(req, inMemory, reader, pre, logger); err != nil {
+		if _, err := UploadFileChunk(req, inMemory, reader, pre, logger); err != nil {
 			logger.Error("ChunkUploadHandler failed", slog.String("pre", pre), slog.Any("err", err))
 			return err
 		}
@@ -114,6 +113,6 @@ func UploadDirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, in
 	task.Chunks.Set(task.Index, successChunkState)
 	logger.Info("chunk transfer success, set acked=2", slog.String("pre", pre), slog.String("index", task.Index))
 
-	logger.Info("ClientUploadHandler success", slog.String("pre", pre))
+	logger.Info("UploadDirectImp success", slog.String("pre", pre))
 	return nil
 }

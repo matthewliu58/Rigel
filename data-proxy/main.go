@@ -140,8 +140,11 @@ func handler(logger *slog.Logger) http.HandlerFunc {
 		method := r.Method
 		//最后一跳的逻辑
 		if newIndex == len(hops) {
-			scheme = "https"
-			method = "PUT"
+			sourceType := r.Header.Get("X-Source-Type")
+			if sourceType != "remote-disk" {
+				scheme = "https"
+				method = "PUT"
+			}
 		}
 
 		targetURL := scheme + "://" + targetIP + ":" + targetPort + r.URL.RequestURI()

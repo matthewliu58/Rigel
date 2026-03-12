@@ -2,17 +2,9 @@ package upload
 
 import (
 	"fmt"
-	"golang.org/x/oauth2/google"
 	"golang.org/x/time/rate"
-	"io"
 	"log/slog"
-	"net/http"
-	"os"
-	"path/filepath"
-	"rigel-client/limit_rate"
 	"rigel-client/upload/split"
-	upload2 "rigel-client/upload/upload"
-	"strings"
 	"time"
 )
 
@@ -89,9 +81,8 @@ func UploadRedirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, 
 
 	// --------------- 第三步：上传到目标端 ---------------
 	if dest.DestType == GCPCLoud {
-		if err := upload2.UploadToGCSbyClient(ctx, task.LocalBaseDir, dest.BucketName,
-			task.ObjectName, dest.CredFile, inMemory, reader, pre, logger); err != nil {
-			logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
+		if err := UploadToGCSbyProxy(task, hops, rateLimiter, reader, inMemory, pre, logger); err != nil {
+			logger.Error("UploadToGCSbyProxy failed", slog.String("pre", pre), slog.Any("err", err))
 			return err
 		}
 	} else if dest.DestType == RemoteDisk {
@@ -112,101 +103,6 @@ func UploadRedirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, 
 	task.Chunks.Set(task.Index, successChunkState)
 	logger.Info("chunk transfer success, set acked=2", slog.String("pre", pre), slog.String("index", task.Index))
 
-	logger.Info("ClientUploadHandler success", slog.String("pre", pre))
-	return nil
-}
-
-func UploadToGCSbyProxy(task ChunkTask_, hops string, rateLimiter *rate.Limiter,
-	reader io.ReadCloser, inMemory bool, pre string, logger *slog.Logger) error {
-
-	logger.Info("UploadToGCSbyProxy", slog.String("pre", pre), slog.Any("task", task),
-		slog.String("hops", hops), slog.Bool("inMemory", inMemory))
-
-	ctx := task.Ctx
-	dest := task.Dest
-	var reader_ io.ReadCloser = reader
-
-	// 2. 打开 chunk 文件（或整文件）
-	if !inMemory {
-		// 模式2：inMemory=false → 从本地文件上传（原有逻辑）
-		localFilePath := filepath.Join(task.LocalBaseDir, task.ObjectName) // 修复路径拼接
-
-		// 打开本地文件（错误日志加pre）
-		f, err := os.Open(localFilePath)
-		if err != nil {
-			logger.Error("Failed to open local file",
-				slog.String("pre", pre),
-				slog.String("localFilePath", localFilePath),
-				slog.Any("err", err))
-			return fmt.Errorf("failed to open local file: %w", err)
-		}
-		defer f.Close()
-		reader_ = f
-	}
-
-	// 3. 限流 reader
-	body := limit_rate.NewRateLimitedReader(ctx, reader_, rateLimiter)
-
-	// 4. 解析 hops
-	hopList := strings.Split(hops, ",")
-	if len(hopList) == 0 {
-		return fmt.Errorf("invalid X-Hops: %s", hops)
-	}
-	firstHop := hopList[0]
-
-	// 5. 构造 URL
-	url := fmt.Sprintf(
-		"http://%s/%s/%s",
-		firstHop,
-		dest.BucketName,
-		task.ObjectName,
-	)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
-	if err != nil {
-		return fmt.Errorf("new request: %w", err)
-	}
-
-	// 1. 生成 access token（和 uploadChunkV2 保持一致）
-	jsonBytes, err := os.ReadFile(dest.CredFile)
-	if err != nil {
-		return fmt.Errorf("read cred file: %w", err)
-	}
-
-	creds, err := google.CredentialsFromJSON(
-		ctx,
-		jsonBytes,
-		"https://www.googleapis.com/auth/devstorage.full_control",
-	)
-	if err != nil {
-		return fmt.Errorf("parse credentials: %w", err)
-	}
-
-	token, err := creds.TokenSource.Token()
-	if err != nil {
-		return fmt.Errorf("get token: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("X-Hops", hops)
-	req.Header.Set("X-Chunk-Index", "1")
-	req.Header.Set("X-Rate-Limit-Enable", "true")
-
-	client := &http.Client{
-		Timeout: 5 * time.Minute,
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("http do: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed: %d %s", resp.StatusCode, string(b))
-	}
-
+	logger.Info("UploadRedirectImp success", slog.String("pre", pre))
 	return nil
 }
