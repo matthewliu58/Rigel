@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -258,4 +259,45 @@ func DeleteFilesInDir(dir string, fileNames []string) error {
 	}
 
 	return nil
+}
+
+// ReplaceUploadURLHost 替换Upload URL中的IP:Port为first hop的值
+// 入参：
+//   - originalUploadURL: 原始Upload URL（如 "http://127.0.0.1:8081/api/v1/chunk/upload"）
+//   - firstHop: 目标IP:Port（如 "192.168.1.100:8082"）
+//
+// 出参：
+//   - 替换后的URL / 错误信息
+func ReplaceUploadURLHost(originalUploadURL, firstHop string) (string, error) {
+	// 1. 校验入参合法性
+	if originalUploadURL == "" {
+		return "", fmt.Errorf("original upload URL is empty")
+	}
+	if firstHop == "" {
+		return "", fmt.Errorf("first hop is empty")
+	}
+
+	// 2. 解析原始URL（兼容带/不带协议的情况）
+	var parsedURL *url.URL
+	var err error
+	if !strings.Contains(originalUploadURL, "://") {
+		// 无协议的URL，自动补全http协议（避免解析失败）
+		parsedURL, err = url.Parse("http://" + originalUploadURL)
+	} else {
+		parsedURL, err = url.Parse(originalUploadURL)
+	}
+	if err != nil {
+		return "", fmt.Errorf("parse original URL failed: %w", err)
+	}
+
+	// 3. 替换Host为first hop
+	parsedURL.Host = firstHop
+
+	// 4. 还原URL（如果原始URL无协议，移除补全的http://）
+	resultURL := parsedURL.String()
+	if !strings.Contains(originalUploadURL, "://") {
+		resultURL = strings.TrimPrefix(resultURL, "http://")
+	}
+
+	return resultURL, nil
 }
