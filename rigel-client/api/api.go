@@ -238,7 +238,7 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		logger.Info("UploadInfo", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
 
-		if err := upload.UploadDirect(uploadInfo, pre, logger); err != nil {
+		if err := upload.Upload(uploadInfo, upload.UploadDirectImp, true, pre, logger); err != nil {
 			logger.Error("UploadDirect failed", slog.String("pre", pre), slog.Any("err", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

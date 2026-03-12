@@ -3,31 +3,14 @@ package upload
 import (
 	"context"
 	"fmt"
-	"golang.org/x/oauth2/google"
 	"golang.org/x/time/rate"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
-	"rigel-client/limit_rate"
 	"rigel-client/upload/compose"
 	"rigel-client/upload/split"
 	"rigel-client/util"
-	"strings"
 	"time"
 )
-
-type ChunkEventType int
-
-const (
-	ChunkExpired ChunkEventType = iota
-	ChunkFinished
-)
-
-type ChunkEvent struct {
-	Type    ChunkEventType
-	Indexes map[string]*split.ChunkState
-}
 
 type ChunkTask struct {
 	Ctx        context.Context
@@ -345,117 +328,4 @@ func StartChunkSubmitLoop(
 		}
 	}
 
-}
-
-func uploadChunkRedirect(task ChunkTask, hops string, rateLimiter *rate.Limiter, pre string, logger *slog.Logger) error {
-	ctx := task.Ctx
-
-	logger.Info("开始上传分片", slog.String("pre", pre),
-		"fileName", task.UploadInfo.FileName, "index", task.Index, "hops", hops)
-
-	// 1. 生成 access token（和 uploadChunkV2 保持一致）
-	jsonBytes, err := os.ReadFile(task.UploadInfo.CredFile)
-	if err != nil {
-		return fmt.Errorf("read cred file: %w", err)
-	}
-
-	creds, err := google.CredentialsFromJSON(
-		ctx,
-		jsonBytes,
-		"https://www.googleapis.com/auth/devstorage.full_control",
-	)
-	if err != nil {
-		return fmt.Errorf("parse credentials: %w", err)
-	}
-
-	token, err := creds.TokenSource.Token()
-	if err != nil {
-		return fmt.Errorf("get token: %w", err)
-	}
-
-	// 2. 打开 chunk 文件（或整文件）
-	file, err := os.Open(task.UploadInfo.LocalFilePath)
-	if err != nil {
-		return fmt.Errorf("open file: %w", err)
-	}
-	defer file.Close()
-
-	chunk_, _ := task.Chunks.Get(task.Index)
-	chunk := chunk_.(*split.ChunkState)
-
-	// 3. 读取 chunk 内容
-	section := io.NewSectionReader(file, chunk.Offset, chunk.Size)
-
-	// 3. 限流 reader
-	body := limit_rate.NewRateLimitedReader(ctx, section, rateLimiter)
-
-	// 4. 解析 hops
-	hopList := strings.Split(hops, ",")
-	if len(hopList) == 0 {
-		return fmt.Errorf("invalid X-Hops: %s", hops)
-	}
-	firstHop := hopList[0]
-
-	// 5. 构造 URL
-	url := fmt.Sprintf(
-		"http://%s/%s/%s",
-		firstHop,
-		task.UploadInfo.BucketName,
-		task.ObjectName,
-	)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
-	if err != nil {
-		return fmt.Errorf("new request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("X-Hops", hops)
-	req.Header.Set("X-Chunk-Index", "1")
-	req.Header.Set("X-Rate-Limit-Enable", "true")
-
-	client := &http.Client{
-		Timeout: 5 * time.Minute,
-	}
-
-	task.Chunks.Set(task.Index, &split.ChunkState{
-		Index:      chunk.Index,
-		FileName:   chunk.FileName,
-		ObjectName: chunk.ObjectName,
-		Offset:     chunk.Offset,
-		Size:       chunk.Size,
-		LastSend:   time.Now(),
-		Acked:      1,
-	})
-	logger.Info("上传分片", slog.String("pre", pre),
-		"url", url, "fileName", task.UploadInfo.FileName, "index", task.Index, "hops", hops)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("http do: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upload failed: %d %s", resp.StatusCode, string(b))
-	}
-
-	// 6. 成功后更新状态（重新 set，不 mutate）
-	chunk_, _ = task.Chunks.Get(task.Index)
-	chunk = chunk_.(*split.ChunkState)
-	task.Chunks.Set(task.Index, &split.ChunkState{
-		Index:      chunk.Index,
-		FileName:   chunk.FileName,
-		ObjectName: chunk.ObjectName,
-		Offset:     chunk.Offset,
-		Size:       chunk.Size,
-		LastSend:   chunk.LastSend,
-		Acked:      2,
-	})
-	logger.Info("上传分片成功", slog.String("pre", pre),
-		"fileName", task.UploadInfo.FileName, "index", task.Index, "hops", hops)
-
-	return nil
 }

@@ -2,8 +2,11 @@ package upload
 
 import (
 	"context"
+	"fmt"
 	"golang.org/x/time/rate"
+	"io"
 	"log/slog"
+	"rigel-client/download"
 	"rigel-client/upload/compose"
 	"rigel-client/upload/split"
 	"rigel-client/util"
@@ -18,6 +21,18 @@ const (
 	RemoteDisk = "remote-disk"
 	LocalDisk  = "local-disk"
 )
+
+type ChunkEventType int
+
+const (
+	ChunkExpired ChunkEventType = iota
+	ChunkFinished
+)
+
+type ChunkEvent struct {
+	Type    ChunkEventType
+	Indexes map[string]*split.ChunkState
+}
 
 type SourceInfo struct {
 	SourceType string // 源类型（disk/cloud）
@@ -354,4 +369,172 @@ func StartChunkSubmitLoop_(
 			break
 		}
 	}
+}
+
+func Upload(uploadInfo UploadInfo,
+	handler func(ChunkTask_, string, *rate.Limiter, bool, string, *slog.Logger) error,
+	direct bool,
+	pre string, logger *slog.Logger) error {
+
+	// 3. 获取文件真实长度
+	ctx := context.Background()
+	var fileSize int64
+	var err error
+	switch uploadInfo.Source.SourceType {
+	case download.GCPCLoud:
+		fileSize, err = download.GetGCSObjectSize(ctx, uploadInfo.Source.BucketName,
+			uploadInfo.File.FileName, uploadInfo.Source.CredFile, pre, logger)
+	case download.RemoteDisk:
+		RemoteDiskSSHConfig := util.SSHConfig{
+			User:     uploadInfo.Source.User,
+			Host:     uploadInfo.Source.Host + ":" + uploadInfo.Source.SSHPort,
+			Password: uploadInfo.Source.Password,
+		}
+		fileSize, err = download.GetRemoteFileSize(ctx, RemoteDiskSSHConfig,
+			uploadInfo.Source.RemoteDir, uploadInfo.File.FileName, pre, logger)
+	case download.LocalDisk:
+		fileSize, err = download.GetLocalFileSize(ctx, uploadInfo.LocalBaseDir, uploadInfo.File.FileName, pre, logger)
+	}
+	if err != nil {
+		logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
+		return err
+	}
+	logger.Info("Get file size success", slog.String("pre", pre), slog.Int64("size", fileSize))
+
+	// 4. 文件分块
+	chunks := util.NewSafeMap()
+
+	chunkSize, err := split.SplitFilebyRange(fileSize, uploadInfo.File.Start, uploadInfo.File.Length,
+		uploadInfo.File.FileName, uploadInfo.File.NewFileName, chunks, pre, logger)
+	if err != nil {
+		logger.Error("Split file failed", slog.String("pre", pre), slog.Any("err", err))
+		return err
+	}
+	//512MB
+	inMemory := false
+	if chunkSize >= int64(512*1024*1024) {
+		inMemory = true
+	}
+
+	//启动定时重传 & check传输完毕
+	done := make(chan struct{})
+	events := make(chan ChunkEvent, 100)
+	interval := 10 * time.Duration(time.Second)
+	expire := 120 * time.Duration(time.Second)
+	StartChunkTimeoutChecker_(ctx, chunks, interval, expire, events, pre, logger)
+
+	//启动消费者 默认一个http并发度
+	workerPool := NewWorkerPool_(QueueBufferSize, util.RoutingInfo{}, handler, inMemory, pre, logger)
+
+	//events 消费
+	go ChunkEventLoop_(ctx, chunks, workerPool, uploadInfo, events, done, pre, logger)
+
+	// 4. 启动分片上传
+	go StartChunkSubmitLoop_(ctx, chunks, workerPool, uploadInfo,
+		false, nil, pre, logger)
+
+	newFileName := uploadInfo.File.NewFileName
+
+	// 5分钟超时定时器
+	timeout := 5 * time.Minute
+	select {
+	case <-done:
+		logger.Info("Function 正常完成", slog.String("per", pre), slog.String("newFileName", newFileName))
+	case <-time.After(timeout):
+		logger.Warn("等待 5 分钟超时，退出等待", slog.String("per", pre),
+			slog.String("newFileName", newFileName))
+		return fmt.Errorf("等待 5 分钟超时，退出等待, newFileName: %s", newFileName)
+	}
+
+	logger.Info("主程序执行完毕", slog.String("per", pre), slog.String("newFileName", newFileName))
+	return nil
+}
+
+// GetTransferReader 根据不同源类型（GCS/远程磁盘/本地磁盘）获取流式Reader
+// 核心功能：抽离原UploadRedirectImp中获取reader的逻辑，解耦且可复用
+func GetTransferReader(
+	ctx context.Context,
+	source SourceInfo,
+	file FileInfo,
+	localBaseDir string,
+	objectName string,
+	inMemory bool,
+	pre string,
+	logger *slog.Logger,
+) (io.ReadCloser, error) {
+	var reader io.ReadCloser
+	var err error
+
+	switch source.SourceType {
+	case GCPCLoud: // GCS云存储源
+		reader, err = download.DownloadFromGCSbyClient(
+			ctx,
+			localBaseDir,
+			source.BucketName,
+			file.FileName,
+			objectName,
+			source.CredFile,
+			file.Start,
+			file.Length,
+			inMemory,
+			pre,
+			logger,
+		)
+		if err != nil {
+			logger.Error("DownloadFromGCSbyClient failed", slog.String("pre", pre), slog.Any("err", err))
+			return nil, err
+		}
+
+	case RemoteDisk: // 远程磁盘（SSH）源
+		remoteDiskSSHConfig := util.SSHConfig{
+			User:     source.User,
+			Host:     source.Host + ":" + source.SSHPort,
+			Password: source.Password,
+		}
+
+		reader, _, err = download.SSHDDReadRangeChunk(
+			ctx,
+			remoteDiskSSHConfig,
+			source.RemoteDir,
+			file.FileName,
+			objectName,
+			localBaseDir,
+			file.Start,
+			file.Length,
+			"", // bs参数传空，函数内部自动适配
+			inMemory,
+			pre,
+			logger,
+		)
+		if err != nil {
+			logger.Error("SSHDDReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
+			return nil, err
+		}
+
+	case LocalDisk: // 本地磁盘源
+		reader, _, err = download.LocalReadRangeChunk(
+			ctx,
+			localBaseDir,
+			file.FileName,
+			file.Start,
+			file.Length,
+			pre,
+			logger,
+		)
+		if err != nil {
+			logger.Error("LocalReadRangeChunk failed", slog.String("pre", pre), slog.Any("err", err))
+			return nil, err
+		}
+
+	default: // 未知源类型
+		return nil, fmt.Errorf("unsupported source type: %s", source.SourceType)
+	}
+
+	logger.Info("GetTransferReader success",
+		slog.String("pre", pre),
+		slog.String("sourceType", source.SourceType),
+		slog.String("fileName", file.FileName),
+		slog.String("objectName", objectName))
+
+	return reader, nil
 }
