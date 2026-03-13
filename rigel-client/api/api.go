@@ -12,14 +12,10 @@ import (
 	"rigel-client/download"
 	"rigel-client/upload"
 	"rigel-client/util"
-	"strconv"
 )
 
 const (
 	FileName       = "X-File-Name" // 通过 Header 传文件名
-	FileStart      = "X-File-Start"
-	FileLength     = "X-File-Length"
-	NewFileName    = "X-New-File-Name"
 	DataSourceType = "X-Data-Source-Type"
 	DataDestType   = "X-Data-Dest-Type"
 	ClientIP       = "X-Client-IP"
@@ -27,17 +23,65 @@ const (
 	RoutingURL     = "/api/v1/routing"
 )
 
+// TransferConfig 适配Form表单传输的文件传输配置结构体
+type TransferConfig struct {
+	// ------------- 核心Form参数 -------------
+	FileName       string `json:"file_name" form:"file_name"`               // 源文件名（如test.zip）
+	FileStart      int64  `json:"file_start" form:"file_start"`             // 文件起始偏移（字节，默认0）
+	FileLength     int64  `json:"file_length" form:"file_length"`           // 文件传输长度（字节，0=整个文件）
+	NewFileName    string `json:"new_file_name" form:"new_file_name"`       // 目标文件名
+	DataSourceType string `json:"data_source_type" form:"data_source_type"` // 源类型
+	DataDestType   string `json:"data_dest_type" form:"data_dest_type"`     // 目标类型
+
+	// ------------- 源文件存储配置 -------------
+	Source struct {
+		// SSH配置（仅DataSourceType=remote_ssh时生效）
+		SSH struct {
+			User      string `json:"ssh_user" form:"ssh_user"`             // SSH用户名
+			Host      string `json:"ssh_host" form:"ssh_host"`             // SSH主机IP
+			SSHPort   string `json:"ssh_port" form:"ssh_port"`             // SSH端口
+			Password  string `json:"ssh_password" form:"ssh_password"`     // SSH密码
+			RemoteDir string `json:"ssh_remote_dir" form:"ssh_remote_dir"` // 远端文件目录
+		} `json:"ssh" form:"ssh"`
+
+		// GCP源配置（仅DataSourceType=gcp时生效）
+		CredFile   string `json:"gcp_source_cred_file" form:"gcp_source_cred_file"` // GCP凭证文件
+		BucketName string `json:"gcp_source_bucket" form:"gcp_source_bucket"`       // GCP存储桶
+	} `json:"source" form:"source"`
+
+	// ------------- 目标文件存储配置 -------------
+	Target struct {
+		// GCP目标配置（仅DataDestType=gcp时生效）
+		CredFile   string `json:"gcp_dest_cred_file" form:"gcp_dest_cred_file"` // GCP凭证文件
+		BucketName string `json:"gcp_dest_bucket" form:"gcp_dest_bucket"`       // GCP存储桶
+
+		// 文件系统接口配置（仅DataDestType=api时生效）
+		FileSys struct {
+			Upload string `json:"file_sys_upload" form:"file_sys_upload"` // 上传接口地址
+			Merge  string `json:"file_sys_merge" form:"file_sys_merge"`   // 合并接口地址
+		} `json:"file_sys" form:"file_sys"`
+	} `json:"target" form:"target"`
+
+	// ------------- 传输通用配置 -------------
+	//Transfer struct {
+	//	ChunkSize   int64 `json:"chunk_size" form:"chunk_size"`     // 分块大小（字节，默认512MB）
+	//	Timeout     int64 `json:"timeout" form:"timeout"`           // 整体超时（秒，默认300）
+	//	RateLimit   int   `json:"rate_limit" form:"rate_limit"`     // 速率限制（Mbps，0=不限）
+	//	Concurrency int   `json:"concurrency" form:"concurrency"`   // 并发数（默认10）
+	//} `json:"transfer" form:"transfer"`
+}
+
 var (
-	RemoteDiskSSHConfig util.SSHConfig
-	RemoteDiskDir       string
-
-	CredFileSource   string
-	BucketNameSource string
-
-	FileSys util.FileSys
-
-	CredFile   string
-	BucketName string
+	//RemoteDiskSSHConfig util.SSHConfig
+	//RemoteDiskDir       string
+	//
+	//CredFileSource   string
+	//BucketNameSource string
+	//
+	//FileSys util.FileSys
+	//
+	//CredFile   string
+	//BucketName string
 
 	LocalBaseDir string
 )
@@ -48,21 +92,31 @@ var (
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
 func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (upload.UploadInfo, bool, error) {
 
-	logger.Info("Start parsing headers and building upload info", slog.String("pre", pre))
+	fileName := c.GetHeader(FileName)
+	logger.Info("Start parsing headers and building upload info", slog.String("pre", pre),
+		slog.String("fileName", fileName))
+
+	var req TransferConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
+		logger.Error(errMsg, slog.String("pre", pre))
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
+		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
+	}
+
+	logger.Info("TransferConfig", slog.String("pre", pre), slog.Any("req", req))
 
 	// 1. 解析请求头
-	fileName := c.GetHeader(FileName)
-	fileStartStr := c.GetHeader(FileStart)
-	fileLengthStr := c.GetHeader(FileLength)
-	newFileName := c.GetHeader(NewFileName)
-	sourceType := c.GetHeader(DataSourceType)
-	destType := c.GetHeader(DataDestType)
+	fileName = req.FileName
+	fileStart := req.FileStart
+	fileLength := req.FileLength
+	newFileName := req.NewFileName
+	sourceType := req.DataSourceType
+	destType := req.DataDestType
 
 	// 2.1 必传项校验
 	requiredChecks := map[string]string{
 		FileName:       fileName,
-		FileStart:      fileStartStr,
-		FileLength:     fileLengthStr,
 		DataSourceType: sourceType,
 		DataDestType:   destType,
 	}
@@ -73,23 +127,6 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 			c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
 			return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
 		}
-	}
-
-	// 2.2 数值类型转换与校验
-	fileStart, err := strconv.ParseInt(fileStartStr, 10, 64)
-	if err != nil || fileStart < 0 {
-		errMsg := fmt.Sprintf("Invalid %s: must be non-negative integer", FileStart)
-		logger.Error(errMsg, slog.String("pre", pre), slog.Any("err", err))
-		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
-	}
-
-	fileLength, err := strconv.ParseInt(fileLengthStr, 10, 64)
-	if err != nil || fileLength <= 0 {
-		errMsg := fmt.Sprintf("Invalid %s: must be positive integer", FileLength)
-		logger.Error(errMsg, slog.String("pre", pre), slog.Any("err", err))
-		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
 	}
 
 	// 2.3 源/目标类型合法性校验
@@ -126,23 +163,22 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		},
 		Source: upload.SourceInfo{
 			SourceType: sourceType,
-			User:       RemoteDiskSSHConfig.User,
-			Host:       RemoteDiskSSHConfig.Host,
-			SSHPort:    "22",
-			Password:   RemoteDiskSSHConfig.Password,
-			RemoteDir:  RemoteDiskDir,
-			BucketName: BucketNameSource,
-			CredFile:   CredFileSource,
+			User:       req.Source.SSH.User,
+			Host:       req.Source.SSH.Host + ":" + req.Source.SSH.SSHPort,
+			//SSHPort:    "22",
+			Password:   req.Source.SSH.Password,
+			RemoteDir:  req.Source.SSH.RemoteDir,
+			BucketName: req.Source.BucketName,
+			CredFile:   req.Source.CredFile,
 		},
 		Dest: upload.DestInfo{
 			DestType: destType,
 			FileSys: util.FileSys{
-				Upload: FileSys.Upload,
-				Merge:  FileSys.Merge,
-				Dir:    FileSys.Dir,
+				Upload: req.Target.FileSys.Upload,
+				Merge:  req.Target.FileSys.Merge,
 			},
-			BucketName: BucketName,
-			CredFile:   CredFile,
+			BucketName: req.Target.BucketName,
+			CredFile:   req.Target.CredFile,
 		},
 		LocalBaseDir: LocalBaseDir,
 	}

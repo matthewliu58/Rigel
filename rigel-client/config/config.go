@@ -12,30 +12,8 @@ var Config_ *Config
 
 // Config 一级结构体，对应yaml平级配置
 type Config struct {
-	Port        string `yaml:"port"`         // 服务端口
-	ControlHost string `yaml:"control_host"` // 控制接口地址
-
-	// SSH相关配置（补充，用于远端文件读取）
-	SSH struct {
-		User      string `yaml:"user"`       // SSH用户名（如root）
-		Host      string `yaml:"host"`       // SSH主机IP（如192.168.1.20）
-		SSHPort   string `yaml:"ssh_port"`   // SSH端口（默认22）
-		Password  string `yaml:"password"`   // SSH密码
-		RemoteDir string `yaml:"remote_dir"` // 远端文件目录（如/mnt/remote-data）
-	} `yaml:"ssh"`
-
-	CredFileSource   string `yaml:"cred_file_source"`   // GCP / 服务凭证文件
-	BucketNameSource string `yaml:"bucket_name_source"` // 本地上传目录
-
-	FileSys struct {
-		Upload string `yaml:"upload"` // 上传接口地址 // ``
-		Merge  string `yaml:"merge"`  // 合并接口地址
-		Dir    string `yaml:"dir"`
-	} `yaml:"file_sys"` // 文件系统接口地址
-
-	CredFile   string `yaml:"cred_file"` // GCP / 服务凭证文件
-	BucketName string `yaml:"bucket_name"`
-
+	Port         string `yaml:"port"`           // 服务端口
+	ControlHost  string `yaml:"control_host"`   // 控制接口地址
 	LocalBaseDir string `yaml:"local_base_dir"` // 本地上传目录
 }
 

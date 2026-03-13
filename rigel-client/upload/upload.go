@@ -105,7 +105,7 @@ type SourceInfo struct {
 	SourceType string // 源类型（disk/cloud）
 	User       string // SSH用户名
 	Host       string // SSH主机IP
-	SSHPort    string // SSH端口
+	//SSHPort    string // SSH端口
 	Password   string // SSH密码
 	RemoteDir  string
 	BucketName string

@@ -61,7 +61,6 @@ type SSHConfig struct {
 type FileSys struct {
 	Upload string // 上传接口地址 // ``
 	Merge  string // 合并接口地址
-	Dir    string
 }
 
 // AutoSelectChunkSize 根据文件大小自动选择最优分片大小（直接返回字节数，无字符串解析）

@@ -33,22 +33,7 @@ func main() {
 		return
 	}
 
-	api.CredFileSource = config.Config_.CredFileSource
-	api.BucketNameSource = config.Config_.BucketNameSource
-	api.CredFile = config.Config_.CredFile
-	api.BucketName = config.Config_.BucketName
 	api.LocalBaseDir = config.Config_.LocalBaseDir
-	api.RemoteDiskDir = config.Config_.SSH.RemoteDir
-	api.RemoteDiskSSHConfig = util.SSHConfig{
-		User:     config.Config_.SSH.User,
-		Host:     config.Config_.SSH.Host + ":" + config.Config_.SSH.SSHPort,
-		Password: config.Config_.SSH.Password,
-	}
-	api.FileSys = util.FileSys{
-		Upload: config.Config_.FileSys.Upload,
-		Merge:  config.Config_.FileSys.Merge,
-		Dir:    config.Config_.FileSys.Dir,
-	}
 
 	logger.Info("config data", slog.String("pre", pre), slog.Any("data", config.Config_))
 
