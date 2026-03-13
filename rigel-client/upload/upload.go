@@ -64,7 +64,7 @@ type FileInfo struct {
 }
 
 // UploadTask 分块上传任务结构体
-type ChunkTask_ struct {
+type ChunkTask struct {
 	Ctx          context.Context
 	Index        string // 分块编号
 	Chunks       *util.SafeMap
@@ -83,11 +83,11 @@ type UploadInfo struct {
 	LocalBaseDir string
 }
 
-type WorkerPool_ struct {
-	TaskCh chan ChunkTask_
+type WorkerPool struct {
+	TaskCh chan ChunkTask
 }
 
-func StartChunkTimeoutChecker_(
+func StartChunkTimeoutChecker(
 	ctx context.Context,
 	s *util.SafeMap,
 	interval time.Duration,
@@ -107,7 +107,7 @@ func StartChunkTimeoutChecker_(
 		for {
 			select {
 			case <-ticker.C:
-				expired, finished, unfinished := CollectExpiredChunks_(s, expire, pre, logger)
+				expired, finished, unfinished := CollectExpiredChunks(s, expire, pre, logger)
 
 				if !unfinished {
 					if finished {
@@ -132,7 +132,7 @@ func StartChunkTimeoutChecker_(
 	}()
 }
 
-func CollectExpiredChunks_(
+func CollectExpiredChunks(
 	s *util.SafeMap,
 	expire time.Duration,
 	pre string,
@@ -142,7 +142,7 @@ func CollectExpiredChunks_(
 	expired = make(map[string]*split.ChunkState)
 	finished = true // 先假设都 ack 了
 
-	logger.Info("CollectExpiredChunks_", slog.String("pre", pre),
+	logger.Info("CollectExpiredChunks", slog.String("pre", pre),
 		slog.Any("now", now), slog.Any("expire", expire))
 	chunks_ := s.GetAll()
 
@@ -171,17 +171,17 @@ func CollectExpiredChunks_(
 	return expired, finished, false
 }
 
-func NewWorkerPool_(
+func NewWorkerPool(
 	queueSize int,
 	routingInfo util.RoutingInfo,
-	handler func(ChunkTask_, string, *rate.Limiter, bool, string, *slog.Logger) error,
+	handler func(ChunkTask, string, *rate.Limiter, bool, string, *slog.Logger) error,
 	inMemory bool,
 	pre string,
 	logger *slog.Logger,
-) *WorkerPool_ {
+) *WorkerPool {
 
-	p := &WorkerPool_{TaskCh: make(chan ChunkTask_, queueSize)}
-	logger.Info("NewWorkerPool_", slog.String("pre", pre), "queueSize", queueSize)
+	p := &WorkerPool{TaskCh: make(chan ChunkTask, queueSize)}
+	logger.Info("NewWorkerPool", slog.String("pre", pre), "queueSize", queueSize)
 
 	workerNum := len(routingInfo.Routing) //todo 并发数可以增加 2-3倍
 	if workerNum <= 0 {
@@ -242,10 +242,10 @@ func NewWorkerPool_(
 	return p
 }
 
-func ChunkEventLoop_(ctx context.Context, chunks *util.SafeMap, workerPool *WorkerPool_,
+func ChunkEventLoop(ctx context.Context, chunks *util.SafeMap, workerPool *WorkerPool,
 	uploadInfo UploadInfo, events <-chan ChunkEvent, done chan struct{}, pre string, logger *slog.Logger) {
 
-	logger.Info("ChunkEventLoop_", slog.String("pre", pre))
+	logger.Info("ChunkEventLoop", slog.String("pre", pre))
 
 	for {
 		select {
@@ -253,7 +253,7 @@ func ChunkEventLoop_(ctx context.Context, chunks *util.SafeMap, workerPool *Work
 			switch ev.Type {
 			case ChunkExpired:
 				logger.Warn("超时重传", slog.String("pre", pre), "indexes", ev.Indexes)
-				StartChunkSubmitLoop_(ctx, chunks, workerPool, uploadInfo, true, ev.Indexes, pre, logger)
+				StartChunkSubmitLoop(ctx, chunks, workerPool, uploadInfo, true, ev.Indexes, pre, logger)
 			case ChunkFinished:
 				var parts []string
 
@@ -309,7 +309,7 @@ func ChunkEventLoop_(ctx context.Context, chunks *util.SafeMap, workerPool *Work
 	}
 }
 
-func (p *WorkerPool_) Submit_(task ChunkTask_) bool {
+func (p *WorkerPool) Submit(task ChunkTask) bool {
 	select {
 	case p.TaskCh <- task:
 		//fmt.Println("submit task", task)
@@ -320,10 +320,10 @@ func (p *WorkerPool_) Submit_(task ChunkTask_) bool {
 	}
 }
 
-func StartChunkSubmitLoop_(
+func StartChunkSubmitLoop(
 	ctx context.Context,
 	chunks *util.SafeMap,
-	workerPool *WorkerPool_,
+	workerPool *WorkerPool,
 	uploadInfo UploadInfo,
 	resubmit bool,
 	resubmitIndexes map[string]*split.ChunkState,
@@ -352,7 +352,7 @@ func StartChunkSubmitLoop_(
 			}
 		}
 
-		task := ChunkTask_{
+		task := ChunkTask{
 			Ctx:        ctx,
 			Index:      v_.Index,
 			Chunks:     chunks,
@@ -362,7 +362,7 @@ func StartChunkSubmitLoop_(
 			Dest:       uploadInfo.Dest,
 		}
 
-		if !workerPool.Submit_(task) {
+		if !workerPool.Submit(task) {
 			// 队列满了，本轮结束，等下个 tick
 			logger.Warn("workerPool full", slog.String("pre", pre))
 			time.Sleep(3 * time.Second)
@@ -372,8 +372,8 @@ func StartChunkSubmitLoop_(
 }
 
 func Upload(uploadInfo UploadInfo,
-	handler func(ChunkTask_, string, *rate.Limiter, bool, string, *slog.Logger) error,
-	direct bool,
+	handler func(ChunkTask, string, *rate.Limiter, bool, string, *slog.Logger) error,
+	routing util.RoutingInfo,
 	pre string, logger *slog.Logger) error {
 
 	// 3. 获取文件真实长度
@@ -421,16 +421,16 @@ func Upload(uploadInfo UploadInfo,
 	events := make(chan ChunkEvent, 100)
 	interval := 10 * time.Duration(time.Second)
 	expire := 120 * time.Duration(time.Second)
-	StartChunkTimeoutChecker_(ctx, chunks, interval, expire, events, pre, logger)
+	StartChunkTimeoutChecker(ctx, chunks, interval, expire, events, pre, logger)
 
 	//启动消费者 默认一个http并发度
-	workerPool := NewWorkerPool_(QueueBufferSize, util.RoutingInfo{}, handler, inMemory, pre, logger)
+	workerPool := NewWorkerPool(QueueBufferSize, routing, handler, inMemory, pre, logger)
 
 	//events 消费
-	go ChunkEventLoop_(ctx, chunks, workerPool, uploadInfo, events, done, pre, logger)
+	go ChunkEventLoop(ctx, chunks, workerPool, uploadInfo, events, done, pre, logger)
 
 	// 4. 启动分片上传
-	go StartChunkSubmitLoop_(ctx, chunks, workerPool, uploadInfo,
+	go StartChunkSubmitLoop(ctx, chunks, workerPool, uploadInfo,
 		false, nil, pre, logger)
 
 	newFileName := uploadInfo.File.NewFileName

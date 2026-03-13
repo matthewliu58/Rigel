@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func UploadDirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
+func UploadDirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 
 	logger.Info("UploadDirectImp", slog.String("pre", pre), slog.Any("task", task))
 

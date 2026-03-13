@@ -151,128 +151,185 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 	return uploadInfo, false, nil
 }
 
+// V2ClientUploadHandler V2版本客户端直传文件处理器
+// 核心流程：解析上传请求头 -> 直接调用客户端直传逻辑上传文件 -> 返回上传结果
+// 区别于V1代理上传：无需调用B服务获取路由，直接完成文件上传
 func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 生成5位随机字符串作为请求唯一标识，用于日志追踪
+		requestID := util.GenerateRandomLetters(5)
+		logger.Info("V2ClientUploadHandler start", slog.String("requestID", requestID))
 
-		pre := util.GenerateRandomLetters(5)
-		logger.Info("V2ClientUploadHandler", slog.String("pre", pre))
-
-		uploadInfo, _, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
+		// 1. 解析请求头信息，构建上传所需的基础信息（文件名、存储路径、客户端信息等）
+		// 返回值说明：uploadInfo-上传核心信息；_（忽略值）-扩展字段；err-解析错误
+		uploadInfo, _, err := ParseHeadersAndBuildUploadInfo(c, requestID, logger)
 		if err != nil {
-			return
+			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
 
-		if err := upload.Upload(uploadInfo, upload.UploadDirectImp, true, pre, logger); err != nil {
-			logger.Error("UploadDirectImp failed", slog.String("pre", pre), slog.Any("err", err))
+		// 2. 调用客户端直传实现上传文件到存储服务（C服务）
+		// UploadDirectImp：客户端直传实现（区别于V1的代理转发实现）
+		// 参数说明：uploadInfo-上传信息；UploadDirectImp-直传实现函数；true-是否开启并发；requestID-请求标识；logger-日志实例
+		if err := upload.Upload(uploadInfo, upload.UploadDirectImp, util.RoutingInfo{}, requestID, logger); err != nil {
+			logger.Error("client direct upload failed", slog.String("requestID", requestID), slog.Any("err", err))
+			// 返回500内部错误，携带具体错误信息
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
+		// 3. 上传成功，返回标准化响应
+		logger.Info("V2ClientUploadHandler success", slog.String("requestID", requestID),
+			slog.String("fileName", uploadInfo.File.FileName),
+			slog.String("objectName", uploadInfo.File.NewFileName))
 		c.JSON(http.StatusOK, gin.H{
-			"message":    "upload by client success",
+			"message":    "upload by client success",  // 客户端直传成功提示
+			"file_name":  uploadInfo.File.FileName,    // 原始文件名
+			"objectName": uploadInfo.File.NewFileName, // 存储后的对象名（可能是重命名后的名称）
+		})
+	}
+}
+
+// V1ProxyUploadHandler 代理上传核心处理器
+// 流程：解析请求 -> 调用B服务获取路由 -> 上传文件到C服务 -> 返回响应
+func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 生成请求唯一标识，用于日志追踪
+		requestID := util.GenerateRandomLetters(5)
+		logger.Info("V1ProxyUploadHandler start", slog.String("requestID", requestID))
+
+		// 1. 解析请求头和请求体，构建上传基础信息
+		uploadInfo, _, err := parseRequest(c, requestID, logger)
+		if err != nil {
+			return // 错误已在子函数中处理并返回响应
+		}
+
+		// 2. 调用B服务获取路由信息
+		routingInfo, err := getRoutingInfoFromServiceB(c, requestID, logger)
+		if err != nil {
+			handleError(c, logger, requestID, http.StatusInternalServerError, "get routing info failed", err)
+			return
+		}
+		if len(routingInfo.Routing) == 0 {
+			handleError(c, logger, requestID, http.StatusBadRequest, "routing info is empty", nil)
+			return
+		}
+
+		// 3. 上传文件到C服务
+		if err := upload.Upload(uploadInfo, upload.UploadRedirectImp, routingInfo, requestID, logger); err != nil {
+			handleError(c, logger, requestID, http.StatusInternalServerError, "upload to service C failed", err)
+			return
+		}
+
+		// 4. 返回成功响应
+		logger.Info("V1ProxyUploadHandler success", slog.String("requestID", requestID),
+			slog.String("fileName", uploadInfo.File.FileName),
+			slog.String("objectName", uploadInfo.File.NewFileName))
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "upload by proxy success",
 			"file_name":  uploadInfo.File.FileName,
 			"objectName": uploadInfo.File.NewFileName,
 		})
 	}
 }
 
-func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
+// parseRequest 解析请求头、请求体，构建上传信息并记录日志
+func parseRequest(c *gin.Context, requestID string, logger *slog.Logger) (upload.UploadInfo, []byte, error) {
 
-		pre := util.GenerateRandomLetters(5)
-		logger.Info("V1ProxyUploadHandler", slog.String("pre", pre))
+	var uploadInfo upload.UploadInfo
+	var err error
 
-		//1、获取入参 header and form-------------------------------
-		uploadInfo, _, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
-		if err != nil {
-			return
-		}
-		//读取客户端请求 body
-		bodyBytes, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "读取请求失败" + err.Error(),
-			})
-			return
-		}
-		//解析 body 用于日志
-		var req util.UserRouteRequest
-		if err := json.Unmarshal(bodyBytes, &req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "请求体解析失败" + err.Error()})
-			return
-		}
-		logger.Info("Proxy UserRoute request", slog.String("pre", pre), slog.Any("req", req))
-
-		//2、构建请求转发给B 获取路由---------------------------------------------------------
-		bReq, err := http.NewRequest("POST",
-			config.Config_.ControlHost+RoutingURL, bytes.NewReader(bodyBytes))
-		if err != nil {
-			logger.Error("http NewRequest failed", slog.String("pre", pre),
-				slog.String("err", err.Error()))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		bReq.Header.Set("Content-Type", "application/json")
-		bReq.Header.Set(FileName, req.FileName)
-		bReq.Header.Set(ClientIP, req.ClientIP)
-		bReq.Header.Set(UserName, req.Username)
-		client := &http.Client{}
-		bResp, err := client.Do(bReq)
-		if err != nil {
-			logger.Error("http Do failed", slog.String("pre", pre),
-				slog.String("err", err.Error()))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		defer bResp.Body.Close()
-		//读取B响应 body
-		bRespBody, err := io.ReadAll(bResp.Body)
-		if err != nil {
-			logger.Error("io ReadAll failed", slog.String("pre", pre),
-				slog.String("err", err.Error()))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		//解析B的 JSON 成 ApiResponse
-		var bApiResp util.ApiResponse
-		if err := json.Unmarshal(bRespBody, &bApiResp); err != nil {
-			logger.Error("json Unmarshal ApiResponse failed", slog.String("pre", pre),
-				slog.String("err", err.Error()))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		reqDataBytes, _ := json.Marshal(bApiResp.Data)
-		logger.Info("Proxy UserRoute response", slog.String("pre", pre),
-			slog.String("reqDataBytes", string(reqDataBytes)))
-		var routingInfo util.RoutingInfo
-		if err := json.Unmarshal(reqDataBytes, &routingInfo); err != nil {
-			logger.Error("json Unmarshal ApiResponse failed", slog.String("pre", pre),
-				slog.String("err", err.Error()))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		logger.Info("Proxy UserRoute response", slog.String("pre", pre),
-			slog.Any("routingInfo", routingInfo))
-		if len(routingInfo.Routing) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "routing info is empty",
-			})
-			return
-		}
-
-		//3、上传文件到C---------------------------------------------------------
-		if err := upload.Upload(uploadInfo, upload.UploadRedirectImp, true, pre, logger); err != nil {
-			logger.Error("UploadRedirectImp failed", slog.String("pre", pre), slog.Any("err", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		//4、返回响应---------------------------------------------------------
-		c.JSON(http.StatusOK, gin.H{
-			"message":    "upload by proxy success",
-			"file_name":  uploadInfo.File.FileName,
-			"objectName": uploadInfo.File.NewFileName,
-		})
-
+	// 解析Header构建UploadInfo
+	uploadInfo, _, err = ParseHeadersAndBuildUploadInfo(c, requestID, logger)
+	if err != nil {
+		handleError(c, logger, requestID, http.StatusBadRequest, "parse headers failed", err)
+		return uploadInfo, nil, err
 	}
+
+	// 读取并解析请求体
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		handleError(c, logger, requestID, http.StatusBadRequest, "read request body failed", err)
+		return uploadInfo, nil, err
+	}
+
+	// 解析请求体为UserRouteRequest（仅用于日志）
+	var req util.UserRouteRequest
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		handleError(c, logger, requestID, http.StatusBadRequest, "unmarshal request body failed", err)
+		return uploadInfo, nil, err
+	}
+	logger.Info("parse request success", slog.String("requestID", requestID), slog.Any("userRequest", req))
+
+	return uploadInfo, bodyBytes, nil
+}
+
+// getRoutingInfoFromServiceB 调用B服务获取路由信息
+func getRoutingInfoFromServiceB(c *gin.Context, requestID string, logger *slog.Logger) (util.RoutingInfo, error) {
+	// 重新读取请求体（避免流已关闭）
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return util.RoutingInfo{}, err
+	}
+
+	// 构建调用B服务的请求
+	req, err := http.NewRequest("POST", config.Config_.ControlHost+RoutingURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		logger.Error("build service B request failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		return util.RoutingInfo{}, err
+	}
+
+	// 设置请求头
+	req.Header.Set("Content-Type", "application/json")
+	var userReq util.UserRouteRequest
+	_ = json.Unmarshal(bodyBytes, &userReq) // 仅用于设置Header，忽略错误（已在parseRequest校验）
+	req.Header.Set(FileName, userReq.FileName)
+	req.Header.Set(ClientIP, userReq.ClientIP)
+	req.Header.Set(UserName, userReq.Username)
+
+	// 发送请求到B服务
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("call service B failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		return util.RoutingInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	// 读取B服务响应
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Error("read service B response failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		return util.RoutingInfo{}, err
+	}
+
+	// 解析B服务响应
+	var apiResp util.ApiResponse
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		logger.Error("unmarshal service B response failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		return util.RoutingInfo{}, err
+	}
+
+	// 解析路由信息
+	reqDataBytes, _ := json.Marshal(apiResp.Data)
+	logger.Info("get service B response", slog.String("requestID", requestID), slog.String("responseData", string(reqDataBytes)))
+	var routingInfo util.RoutingInfo
+	if err := json.Unmarshal(reqDataBytes, &routingInfo); err != nil {
+		logger.Error("unmarshal routing info failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		return util.RoutingInfo{}, err
+	}
+
+	logger.Info("get routing info success", slog.String("requestID", requestID), slog.Any("routingInfo", routingInfo))
+	return routingInfo, nil
+}
+
+// handleError 统一错误处理：记录日志并返回标准化响应
+func handleError(c *gin.Context, logger *slog.Logger, requestID string, statusCode int, msg string, err error) {
+	errMsg := msg
+	if err != nil {
+		errMsg = msg + ": " + err.Error()
+	}
+	logger.Error(errMsg, slog.String("requestID", requestID))
+	c.JSON(statusCode, gin.H{
+		"error": errMsg,
+	})
 }

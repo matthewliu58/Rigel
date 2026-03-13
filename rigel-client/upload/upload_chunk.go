@@ -40,7 +40,7 @@ type ChunkUploadRequest struct {
 //	dataReader: 新增！inMemory=true时传入的数据源Reader（如SSH/GC SReader）
 func UploadFileChunk(
 	req ChunkUploadRequest,
-	inMemory bool,        // 新增：内存模式开关
+	inMemory bool, // 新增：内存模式开关
 	dataReader io.Reader, // 新增：内存模式的数据源Reader
 	pre string,
 	logger *slog.Logger,
@@ -166,7 +166,7 @@ func UploadFileChunk(
 // UploadToGCSbyProxy 通过代理向GCS上传文件/分片（修复后）
 // 核心功能：支持内存流式上传（inMemory=true）和本地文件上传（inMemory=false），带限流和GCP鉴权
 func UploadFileChunkbyProxy(
-	task ChunkTask_,
+	task ChunkTask,
 	hops string,
 	rateLimiter *rate.Limiter,
 	reader io.ReadCloser,

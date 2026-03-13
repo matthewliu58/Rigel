@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func UploadRedirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
+func UploadRedirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 
 	logger.Info("UploadRedirectImp", slog.String("pre", pre), slog.Any("task", task))
 
@@ -86,7 +86,10 @@ func UploadRedirectImp(task ChunkTask_, hops string, rateLimiter *rate.Limiter, 
 			return err
 		}
 	} else if dest.DestType == RemoteDisk {
-
+		if err := UploadFileChunkbyProxy(task, hops, rateLimiter, reader, inMemory, pre, logger); err != nil {
+			logger.Error("UploadFileChunkbyProxy failed", slog.String("pre", pre), slog.Any("err", err))
+			return err
+		}
 	}
 
 	// --------------- 第四步：成功状态更新（Acked=2）---------------
