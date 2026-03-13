@@ -3,11 +3,12 @@ package compose
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log/slog"
 	"net/http"
-	"strings"
+	"rigel-client/util"
 )
 
 // 定义和服务端一致的Header常量
@@ -42,8 +43,15 @@ func ChunkMergeClient(ctx context.Context, serverURL, finalFileName string,
 		return "", 0, fmt.Errorf("分片名列表不能为空")
 	}
 
+	mergeReq := util.ChunkMergeRequest{
+		FinalFileName: finalFileName,
+		ChunkNames:    chunkNames,
+		DeleteChunks:  deleteChunks,
+	}
+	b, _ := json.Marshal(mergeReq)
+
 	// 2. 构造请求（分片合并接口不需要请求体，参数都在Header中）
-	req, err := http.NewRequest("POST", serverURL, bytes.NewReader([]byte{}))
+	req, err := http.NewRequest("POST", serverURL, bytes.NewReader(b))
 	if err != nil {
 		return "", 0, fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -52,9 +60,9 @@ func ChunkMergeClient(ctx context.Context, serverURL, finalFileName string,
 	// 设置最终文件名
 	req.Header.Set(HeaderFileName, finalFileName)
 	// 设置分片名列表（逗号分隔）
-	req.Header.Set(HeaderChunkNames, strings.Join(chunkNames, ","))
+	//req.Header.Set(HeaderChunkNames, strings.Join(chunkNames, ","))
 	// 设置是否删除分片
-	req.Header.Set(HeaderDeleteChunks, fmt.Sprintf("%t", deleteChunks))
+	//req.Header.Set(HeaderDeleteChunks, fmt.Sprintf("%t", deleteChunks))
 	// 设置Content-Type（虽然没有请求体，但建议设置）
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 

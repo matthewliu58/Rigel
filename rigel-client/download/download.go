@@ -71,7 +71,7 @@ func GetRemoteFileSize(ctx context.Context, cfg util.SSHConfig, remoteDir, filen
 	}
 
 	// 建立SSH连接
-	client, err := ssh.Dial("tcp", cfg.Host, sshConfig)
+	client, err := ssh.Dial("tcp", cfg.HostPort, sshConfig)
 	if err != nil {
 		return 0, fmt.Errorf("SSH连接失败：%w", err)
 	}

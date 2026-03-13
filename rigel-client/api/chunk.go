@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"rigel-client/util"
-	"strconv"
-	"strings"
 )
 
 // 核心Header常量
@@ -94,13 +92,17 @@ func ChunkMergeHandler(logger *slog.Logger) gin.HandlerFunc {
 		pre := util.GenerateRandomLetters(5)
 		logger.Info("ChunkMergeHandler start", slog.String("pre", pre))
 
+		var req util.ChunkMergeRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			logger.Error("ChunkMergeHandler bind json failed", slog.String("pre", pre), slog.Any("err", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Bind json failed: " + err.Error()})
+			return
+		}
+
 		// 1. 获取Header参数
 		finalFileName := c.GetHeader(FileName)
-		chunkNamesStr := c.GetHeader(HeaderChunkNames)
-		if finalFileName == "" || chunkNamesStr == "" {
-			logger.Error("ChunkMergeHandler missing header", slog.String("pre", pre),
-				slog.String("finalFileName", finalFileName),
-				slog.String("chunkNamesStr", chunkNamesStr))
+		if finalFileName == "" || len(req.ChunkNames) <= 0 {
+			logger.Error("ChunkMergeHandler missing header", slog.String("pre", pre), slog.Any("req", req))
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": "Missing required headers: " + FileName + "/" + HeaderChunkNames,
 			})
@@ -108,21 +110,16 @@ func ChunkMergeHandler(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		// 2. 解析分片名列表（按发送端指定的顺序）
-		chunkNames := strings.Split(chunkNamesStr, ",")
+		chunkNames := req.ChunkNames
 		if len(chunkNames) == 0 {
-			logger.Error("ChunkMergeHandler empty chunk list", slog.String("pre", pre), slog.String("chunkNamesStr", chunkNamesStr))
+			logger.Error("ChunkMergeHandler empty chunk list", slog.String("pre", pre))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid " + HeaderChunkNames + ": empty chunk list"})
 			return
 		}
 
 		// 3. 解析是否删除分片（默认true）
 		deleteChunks := true
-		deleteChunksStr := c.GetHeader(HeaderDeleteChunks)
-		if deleteChunksStr != "" {
-			if b, err := strconv.ParseBool(deleteChunksStr); err == nil {
-				deleteChunks = b
-			}
-		}
+		deleteChunks = req.DeleteChunks
 
 		// 4. 构建合并配置
 		mergeCfg := ChunkMergeConfig{

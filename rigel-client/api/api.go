@@ -72,17 +72,6 @@ type TransferConfig struct {
 }
 
 var (
-	//RemoteDiskSSHConfig util.SSHConfig
-	//RemoteDiskDir       string
-	//
-	//CredFileSource   string
-	//BucketNameSource string
-	//
-	//FileSys util.FileSys
-	//
-	//CredFile   string
-	//BucketName string
-
 	LocalBaseDir string
 )
 
@@ -164,7 +153,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		Source: upload.SourceInfo{
 			SourceType: sourceType,
 			User:       req.Source.SSH.User,
-			Host:       req.Source.SSH.Host + ":" + req.Source.SSH.SSHPort,
+			HostPort:   req.Source.SSH.Host + ":" + req.Source.SSH.SSHPort,
 			//SSHPort:    "22",
 			Password:   req.Source.SSH.Password,
 			RemoteDir:  req.Source.SSH.RemoteDir,

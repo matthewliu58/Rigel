@@ -109,7 +109,7 @@ func SSHDDReadRangeChunk(
 	}
 
 	// 7. 建立SSH连接
-	client, err := ssh.Dial("tcp", cfg.Host, sshConfig)
+	client, err := ssh.Dial("tcp", cfg.HostPort, sshConfig)
 	if err != nil {
 		return nil, "", fmt.Errorf("SSH连接失败：%w", err)
 	}

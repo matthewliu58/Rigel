@@ -104,7 +104,7 @@ type ChunkEvent struct {
 type SourceInfo struct {
 	SourceType string // 源类型（disk/cloud）
 	User       string // SSH用户名
-	Host       string // SSH主机IP
+	HostPort   string // SSH主机IP
 	//SSHPort    string // SSH端口
 	Password   string // SSH密码
 	RemoteDir  string
@@ -317,19 +317,24 @@ func ChunkEventLoop(ctx context.Context, chunks *util.SafeMap, workerPool *Worke
 		case ev := <-events:
 			switch ev.Type {
 			case ChunkExpired:
+
 				logger.Warn("超时重传", slog.String("pre", pre), "indexes", ev.Indexes)
 				StartChunkSubmitLoop(ctx, chunks, workerPool, uploadInfo, true, ev.Indexes, pre, logger)
+
 			case ChunkFinished:
-				var parts []string
 
 				logger.Info("传输完成", slog.String("pre", pre),
 					slog.String("fileName", uploadInfo.File.NewFileName))
+
+				var parts []string
 				chunks_ := chunks.GetAll()
 				for _, v := range chunks_ {
+
 					v_, ok := v.(*split.ChunkState)
 					if !ok {
 						continue
 					}
+
 					// 用枚举判断状态
 					if ChunkStatus(v_.Acked) != ChunkStatusCompleted {
 						logger.Error("upload failed", slog.String("pre", pre),
@@ -346,15 +351,20 @@ func ChunkEventLoop(ctx context.Context, chunks *util.SafeMap, workerPool *Worke
 
 				var err error
 				if uploadInfo.Dest.DestType == GCPCLoud {
+
 					bucketName := uploadInfo.Dest.BucketName
 					credFile := uploadInfo.Dest.CredFile
 					fileName := uploadInfo.File.NewFileName
 					err = compose.ComposeTree(ctx, bucketName, fileName, credFile, parts, pre, logger)
+
 				} else if uploadInfo.Dest.DestType == RemoteDisk {
+
 					mergeURL := uploadInfo.Dest.FileSys.Merge
 					finalFileName := uploadInfo.File.NewFileName
 					_, _, err = compose.ChunkMergeClient(ctx, mergeURL, finalFileName, parts, true, pre, logger)
+
 				}
+
 				if err != nil {
 					logger.Error("compose failed", slog.String("pre", pre),
 						slog.String("fileName", uploadInfo.File.NewFileName), slog.Any("err", err))
@@ -456,23 +466,31 @@ func Upload(uploadInfo UploadInfo,
 	var err error
 	switch uploadInfo.Source.SourceType {
 	case download.GCPCLoud:
+
 		fileSize, err = download.GetGCSObjectSize(ctx, uploadInfo.Source.BucketName,
 			uploadInfo.File.FileName, uploadInfo.Source.CredFile, pre, logger)
+
 	case download.RemoteDisk:
+
 		RemoteDiskSSHConfig := util.SSHConfig{
 			User:     uploadInfo.Source.User,
-			Host:     uploadInfo.Source.Host + ":" + uploadInfo.Source.SSHPort,
+			HostPort: uploadInfo.Source.HostPort,
 			Password: uploadInfo.Source.Password,
 		}
+
 		fileSize, err = download.GetRemoteFileSize(ctx, RemoteDiskSSHConfig,
 			uploadInfo.Source.RemoteDir, uploadInfo.File.FileName, pre, logger)
+
 	case download.LocalDisk:
+
 		fileSize, err = download.GetLocalFileSize(ctx, uploadInfo.LocalBaseDir, uploadInfo.File.FileName, pre, logger)
 	}
 	if err != nil {
+
 		logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("%w: %s", ErrFileSizeFailed, err.Error())
 	}
+
 	logger.Info("Get file size success", slog.String("pre", pre), slog.Int64("size", fileSize))
 
 	// 4. 文件分块
@@ -563,7 +581,7 @@ func GetTransferReader(
 	case RemoteDisk: // 远程磁盘（SSH）源
 		remoteDiskSSHConfig := util.SSHConfig{
 			User:     source.User,
-			Host:     source.Host + ":" + source.SSHPort,
+			HostPort: source.HostPort,
 			Password: source.Password,
 		}
 

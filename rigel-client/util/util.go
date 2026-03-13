@@ -19,14 +19,10 @@ type ApiResponse struct {
 	Data interface{} `json:"data"` // 业务数据
 }
 
-func GenerateRandomLetters(length int) string {
-	rand.Seed(time.Now().UnixNano())                                  // 使用当前时间戳作为随机数种子
-	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" // 字母范围（大小写）
-	var result string
-	for i := 0; i < length; i++ {
-		result += string(letters[rand.Intn(len(letters))]) // 随机选择一个字母
-	}
-	return result
+type ChunkMergeRequest struct {
+	FinalFileName string   `json:"final_file_name" binding:"required"` // 最终合并后的文件名（必填）
+	ChunkNames    []string `json:"chunk_names" binding:"required"`     // 分片名列表（按顺序，必填）
+	DeleteChunks  bool     `json:"delete_chunks,omitempty"`            // 是否删除分片（可选，默认true）
 }
 
 type UserRouteRequest struct {
@@ -54,13 +50,23 @@ type RoutingInfo struct {
 // SSHConfig 定义SSH连接配置
 type SSHConfig struct {
 	User     string // 用户名
-	Host     string // 主机IP:端口（如192.168.1.20:22）
+	HostPort string // 主机IP:端口（如192.168.1.20:22）
 	Password string // 密码（或用密钥认证）
 }
 
 type FileSys struct {
 	Upload string // 上传接口地址 // ``
 	Merge  string // 合并接口地址
+}
+
+func GenerateRandomLetters(length int) string {
+	rand.Seed(time.Now().UnixNano())                                  // 使用当前时间戳作为随机数种子
+	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" // 字母范围（大小写）
+	var result string
+	for i := 0; i < length; i++ {
+		result += string(letters[rand.Intn(len(letters))]) // 随机选择一个字母
+	}
+	return result
 }
 
 // AutoSelectChunkSize 根据文件大小自动选择最优分片大小（直接返回字节数，无字符串解析）
