@@ -89,13 +89,13 @@ func AutoSelectChunkSize(totalSize int64) int64 {
 	)
 
 	switch {
-	case totalSize < _100MB:
+	case totalSize <= _100MB:
 		return _1M // 1*1024*1024
-	case totalSize < _1GB:
+	case totalSize <= _1GB:
 		return _64M // 64*1024*1024
-	case totalSize < _10GB:
+	case totalSize <= _10GB:
 		return _512M // 512*1024*1024
-	case totalSize < _100GB:
+	case totalSize <= _100GB:
 		return _1G // 1*1024*1024*1024
 	default:
 		return _2G // 2*1024*1024*1024
@@ -112,13 +112,13 @@ func AutoSelectBs(totalSize int64) string {
 	)
 
 	switch {
-	case totalSize < _100MB:
+	case totalSize <= _100MB:
 		return "1M"
-	case totalSize < _1GB:
+	case totalSize <= _1GB:
 		return "64M"
-	case totalSize < _10GB:
+	case totalSize <= _10GB:
 		return "512M"
-	case totalSize < _100GB:
+	case totalSize <= _100GB:
 		return "1G"
 	default:
 		return "2G"

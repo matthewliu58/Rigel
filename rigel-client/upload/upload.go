@@ -513,7 +513,7 @@ func Upload(uploadInfo UploadInfo,
 	events := make(chan ChunkEvent, 100)
 	interval := 10 * time.Duration(time.Second)
 	expire := 120 * time.Duration(time.Second)
-	StartChunkTimeoutChecker(ctx, chunks, interval, expire, events, pre, logger)
+	go StartChunkTimeoutChecker(ctx, chunks, interval, expire, events, pre, logger)
 
 	//启动消费者 默认一个http并发度
 	workerPool := NewWorkerPool(QueueBufferSize, routing, handler, inMemory, pre, logger)
