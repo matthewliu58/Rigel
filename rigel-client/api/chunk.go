@@ -185,7 +185,7 @@ func SaveFileChunk(chunkFile io.Reader, chunkPath string, pre string, logger *sl
 	return nil
 }
 
-// MergeFileChunks 按发送端指定的顺序合并分片
+// MergeFileChunks 按发送端指定的顺序合并分片（修复单分片同名覆盖问题，简化重命名逻辑）
 func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) error {
 	// 1. 参数校验
 	if cfg.BaseDir == "" || cfg.FinalFileName == "" || len(cfg.ChunkNames) == 0 {
@@ -196,7 +196,45 @@ func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) erro
 	// 2. 构建最终文件路径
 	finalPath := filepath.Join(cfg.BaseDir, cfg.FinalFileName)
 
-	// 3. 创建最终文件
+	// 3. 处理单分片特殊场景（核心修复点）
+	if len(cfg.ChunkNames) == 1 {
+		chunkName := cfg.ChunkNames[0]
+		chunkPath := filepath.Join(cfg.BaseDir, chunkName)
+
+		// 检查分片是否存在
+		if _, err := os.Stat(chunkPath); os.IsNotExist(err) {
+			logger.Error("MergeFileChunks chunk not exist", slog.String("pre", pre),
+				slog.Int("mergeOrder", 0),
+				slog.String("chunkName", chunkName),
+				slog.String("chunkPath", chunkPath))
+			return err
+		}
+
+		// 如果分片名和最终文件名一致 → 无需复制，直接返回
+		if chunkName == cfg.FinalFileName {
+			logger.Info("MergeFileChunks single chunk match final name, skip merge",
+				slog.String("pre", pre), slog.String("finalPath", finalPath))
+			return nil
+		}
+
+		// 如果分片名和最终文件名不同 → 直接重命名（仅告警失败，不降级copy）
+		if err := os.Rename(chunkPath, finalPath); err != nil {
+			logger.Error("MergeFileChunks rename single chunk failed",
+				slog.String("pre", pre),
+				slog.String("from", chunkPath),
+				slog.String("to", finalPath),
+				slog.Any("err", err))
+			return err // 重命名失败直接返回错误，不继续处理
+		}
+
+		// 重命名成功且配置了删除分片 → 无需额外删除（重命名后原文件已不存在）
+		logger.Info("MergeFileChunks rename single chunk success",
+			slog.String("pre", pre), slog.String("from", chunkPath), slog.String("to", finalPath))
+		logger.Info("MergeFileChunks success (single chunk)", slog.String("pre", pre), slog.String("finalPath", finalPath))
+		return nil
+	}
+
+	// 4. 多分片场景（保留原有逻辑）
 	finalFile, err := os.Create(finalPath)
 	if err != nil {
 		logger.Error("MergeFileChunks create final file failed", slog.String("pre", pre),
@@ -205,11 +243,9 @@ func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) erro
 	}
 	defer finalFile.Close()
 
-	// 4. 按发送端指定顺序合并分片
 	for idx, chunkName := range cfg.ChunkNames {
 		chunkPath := filepath.Join(cfg.BaseDir, chunkName)
 
-		// 检查分片是否存在
 		if _, err := os.Stat(chunkPath); os.IsNotExist(err) {
 			logger.Error("MergeFileChunks chunk not exist", slog.String("pre", pre),
 				slog.Int("mergeOrder", idx),
@@ -218,7 +254,6 @@ func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) erro
 			return err
 		}
 
-		// 打开分片文件
 		chunkFile, err := os.Open(chunkPath)
 		if err != nil {
 			logger.Error("MergeFileChunks open chunk failed", slog.String("pre", pre),
@@ -228,7 +263,6 @@ func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) erro
 			return err
 		}
 
-		// 写入分片内容到最终文件
 		if _, err := io.Copy(finalFile, chunkFile); err != nil {
 			chunkFile.Close()
 			logger.Error("MergeFileChunks copy chunk failed", slog.String("pre", pre),
@@ -239,7 +273,6 @@ func MergeFileChunks(cfg ChunkMergeConfig, pre string, logger *slog.Logger) erro
 		}
 		chunkFile.Close()
 
-		// 合并后删除分片（可选）
 		if cfg.DeleteChunks {
 			if err := os.Remove(chunkPath); err != nil {
 				logger.Warn("MergeFileChunks delete chunk failed", slog.String("pre", pre),
