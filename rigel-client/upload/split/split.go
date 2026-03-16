@@ -42,8 +42,8 @@ func SplitFilebyRange(size int64, start, length int64, fileName, newFileName str
 	if length <= 0 {
 		rangeStart = start
 		rangeEnd = size // 结束位置 = 文件总大小（右开）
-		logger.Info("检测到 length ≤ 0，执行全量分片", slog.String("pre", pre),
-			"start", rangeStart, "end", rangeEnd, "total_file_size", size)
+		//logger.Info("检测到 length ≤ 0，执行全量分片", slog.String("pre", pre),
+		//	"start", rangeStart, "end", rangeEnd, "total_file_size", size)
 	} else {
 		// 情况2：length > 0 → 指定范围分片
 		rangeStart = start

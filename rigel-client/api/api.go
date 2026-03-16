@@ -137,10 +137,10 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
 	}
 
-	logger.Info("Header parse success", slog.String("pre", pre),
-		slog.String("fileName", fileName), slog.String("newFileName", newFileName),
-		slog.Int64("fileStart", fileStart), slog.Int64("fileLength", fileLength),
-		slog.String("sourceType", sourceType), slog.String("destType", destType))
+	//logger.Info("Header parse success", slog.String("pre", pre),
+	//	slog.String("fileName", fileName), slog.String("newFileName", newFileName),
+	//	slog.Int64("fileStart", fileStart), slog.Int64("fileLength", fileLength),
+	//	slog.String("sourceType", sourceType), slog.String("destType", destType))
 
 	// 3. 构造UploadInfo
 	uploadInfo := upload.UploadInfo{
@@ -172,7 +172,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		LocalBaseDir: LocalBaseDir,
 	}
 
-	logger.Info("UploadInfo built success", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
+	//logger.Info("UploadInfo built success", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
 	return uploadInfo, false, nil
 }
 
