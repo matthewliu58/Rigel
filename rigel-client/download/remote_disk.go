@@ -84,9 +84,9 @@ func SSHDDReadRangeChunk(
 	// 3. 自动选择最优块大小（如果bs为空）
 	if strings.TrimSpace(bs) == "" {
 		bs = util.AutoSelectBs(actualLength)
-		logger.Info("自动选择块大小",
-			slog.String("pre", pre),
-			slog.String("块大小", bs))
+		//logger.Info("自动选择块大小",
+		//	slog.String("pre", pre),
+		//	slog.String("块大小", bs))
 	}
 
 	// 4. 解析块大小为字节数
