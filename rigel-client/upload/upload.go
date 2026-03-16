@@ -507,6 +507,9 @@ func Upload(uploadInfo UploadInfo,
 	if chunkSize >= int64(512*1024*1024) {
 		inMemory = true
 	}
+	if uploadInfo.Source.SourceType == LocalDisk {
+		inMemory = true
+	}
 
 	//启动定时重传 & check传输完毕
 	done := make(chan struct{})
