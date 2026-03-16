@@ -51,6 +51,26 @@ func (h *SourceHandler) WithGroup(name string) slog.Handler {
 	return &SourceHandler{handler: h.handler.WithGroup(name)}
 }
 
+func AccessLogMiddleware(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		c.Next()
+
+		latency := time.Since(start)
+
+		logger.Info("access",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"status", c.Writer.Status(),
+			"latency_ms", latency.Milliseconds(),
+			"remote", c.ClientIP(),
+			"content_length", c.Request.ContentLength,
+			"user_agent", c.Request.UserAgent(),
+		)
+	}
+}
+
 func main() {
 
 	logDir := "log"
@@ -94,41 +114,13 @@ func main() {
 	router.POST("/api/v1/proxy/upload", api.V1ProxyUploadHandler(logger))
 
 	// 上传接口
-	//router.POST("/api/v1/client/upload", api.V1ClientUploadHandler(logger))
 	router.POST("/api/v2/client/upload", api.V2ClientUploadHandler(logger))
 
 	// ========== 新增文件接收上传接口 ==========
 	router.POST("/api/v1/chunk/upload", api.ChunkUploadHandler(logger)) // 分片上传（自定义名）
 	router.POST("/api/v1/chunk/merge", api.ChunkMergeHandler(logger))   // 分片合并（指定顺序）
 
-	// ========== 新增 HTTPS 直传 ==========
-	//router.POST("/gcp/upload/direct", api.DirectUploadHandler(logger))
-	//
-	//router.POST("/gcp/upload/redirect/v1", api.RedirectV1Handler(logger))
-
-	//router.POST("/gcp/upload/redirect/v2", api.RedirectV2Handler(logger))
-
 	port := "8080"
 	logger.Info("Starting server on port", slog.String("pre", pre), slog.String("port", port))
 	router.Run(":" + port)
-}
-
-func AccessLogMiddleware(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		start := time.Now()
-
-		c.Next()
-
-		latency := time.Since(start)
-
-		logger.Info("access",
-			"method", c.Request.Method,
-			"path", c.Request.URL.Path,
-			"status", c.Writer.Status(),
-			"latency_ms", latency.Milliseconds(),
-			"remote", c.ClientIP(),
-			"content_length", c.Request.ContentLength,
-			"user_agent", c.Request.UserAgent(),
-		)
-	}
 }
