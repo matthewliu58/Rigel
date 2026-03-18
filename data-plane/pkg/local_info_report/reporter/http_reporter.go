@@ -19,7 +19,6 @@ const (
 	//ControlHost    = "http://34.69.185.247:8081"
 	ReportURL      = "/api/v1/vm/report" // 控制平面地址
 	ReportInterval = 10 * time.Second    // 上报周期
-	Timeout        = 10 * time.Second    // HTTP超时
 )
 
 // HTTPReporter HTTP上报器
@@ -31,7 +30,7 @@ type HTTPReporter struct {
 func NewHTTPReporter() *HTTPReporter {
 	return &HTTPReporter{
 		client: &http.Client{
-			Timeout: Timeout,
+			Timeout: 10 * time.Second,
 		},
 	}
 }
@@ -74,11 +73,6 @@ func (r *HTTPReporter) Report(controlHost, pre string, vmReport *model.VMReport)
 	}
 
 	return nil
-}
-
-// 工具函数：格式化UTC时间（复用）
-func FormatUTCTime(t time.Time) string {
-	return t.Format(time.RFC3339)
 }
 
 func ReportCycle(controlHost, pre string, logger *slog.Logger) {

@@ -145,10 +145,7 @@ func UploadFileChunk(
 	httpReq.Header.Set(util.HeaderChunkName, req.ChunkName)
 
 	// 6. 配置 HTTP 客户端（适配 Linux 长连接/超时，完全保留原逻辑）
-	client := &http.Client{
-		// 可选：设置超时（避免大文件上传卡住）
-		//Timeout: 1 * time.Minute,
-	}
+	client := &http.Client{Timeout: 1 * time.Minute}
 
 	// 7. 发送请求（完全保留原逻辑）
 	resp, err := client.Do(httpReq)
@@ -284,9 +281,7 @@ func UploadFileChunkbyProxy(
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
 	// 发送请求
-	client := &http.Client{
-		Timeout: 1 * time.Minute,
-	}
+	client := &http.Client{Timeout: 1 * time.Minute}
 	logger.Info("send HTTP request to proxy",
 		slog.String("pre", pre),
 		slog.String("url", url),

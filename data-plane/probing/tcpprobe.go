@@ -133,20 +133,6 @@ func doProbeLossRTT(targets []util.ProbeTask, cfg Config, pre string, logger *sl
 				var totalRTT time.Duration
 				successes := 0
 
-				//for a := 0; a < cfg.Attempts; a++ {
-				//	start := time.Now()
-				//	conn, err := net.DialTimeout("tcp", target.IP+":"+strconv.Itoa(target.Port), cfg.Timeout)
-				//	rtt := time.Since(start)
-				//
-				//	if err != nil {
-				//		failures++
-				//	} else {
-				//		successes++
-				//		totalRTT += rtt
-				//		conn.Close()
-				//	}
-				//}
-
 				dialer := net.Dialer{
 					Timeout: cfg.Timeout,
 				}
@@ -157,7 +143,7 @@ func doProbeLossRTT(targets []util.ProbeTask, cfg Config, pre string, logger *sl
 					rtt := time.Since(start)
 
 					if err != nil {
-						// 👇 关键：区分错误类型
+						//关键：区分错误类型
 						if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 							// 网络不通 / 丢包
 							failures++
@@ -165,7 +151,7 @@ func doProbeLossRTT(targets []util.ProbeTask, cfg Config, pre string, logger *sl
 						}
 
 						// 非 timeout（通常是 RST）
-						// 👉 网络是通的，只是端口没服务
+						// 网络是通的，只是端口没服务
 						successes++
 						totalRTT += rtt
 						continue

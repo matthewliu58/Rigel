@@ -10,7 +10,7 @@ import (
 )
 
 // 输入是client区域和cloud storage 区域
-func (g *GraphManager) Routing(startContinent string, request util.UserRouteRequest,
+func (g *GraphManager) Routing(startContinent string, request util.EndPoints,
 	pre string, logger *slog.Logger) util.RoutingInfo {
 
 	logger.Info("Routing", slog.String("pre", pre),
@@ -36,7 +36,7 @@ func (g *GraphManager) Routing(startContinent string, request util.UserRouteRequ
 	}
 
 	cloudFull := fmt.Sprintf("%s_%s_%s",
-		request.CloudProvider, request.CloudRegion, request.CloudCity)
+		request.CloudProvider, request.CloudRegion, request.CloudID)
 
 	//没有到该cloud storage的路径
 	if _, ok := g.FindEdgeBySuffix(cloudFull); !ok {

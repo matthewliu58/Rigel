@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"control-plane/etcd_client"
 	"control-plane/etcd_server"
 	"control-plane/pkg/api"
@@ -17,9 +18,106 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
+
+// 自定义Handler：修复slog.Context为context.Context，兼容所有Go 1.21+版本
+type SourceHandler struct {
+	handler slog.Handler
+}
+
+// Handle 核心修复：把slog.Context改为context.Context
+func (h *SourceHandler) Handle(ctx context.Context, r slog.Record) error {
+	// 采集调用日志的位置（跳过当前Handler的栈帧，取真实业务代码的位置）
+	fs := runtime.CallersFrames([]uintptr{r.PC})
+	frame, _ := fs.Next()
+
+	// 只保留文件名（去掉全路径）
+	fileName := filepath.Base(frame.File)
+
+	// 向日志记录中添加源位置字段
+	r.AddAttrs(
+		slog.String("file", fileName),          // 文件名
+		slog.Int("line", frame.Line),           // 行号
+		slog.String("func", frame.Func.Name()), // 函数名（可选）
+	)
+
+	// 交给底层TextHandler输出
+	return h.handler.Handle(ctx, r)
+}
+
+// 以下是slog.Handler接口的默认实现（全部修正为context.Context）
+func (h *SourceHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.handler.Enabled(ctx, level)
+}
+
+func (h *SourceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &SourceHandler{handler: h.handler.WithAttrs(attrs)}
+}
+
+func (h *SourceHandler) WithGroup(name string) slog.Handler {
+	return &SourceHandler{handler: h.handler.WithGroup(name)}
+}
+
+func HandleRoutingWatchEvent(
+	r *routing.GraphManager,
+	eventType string,
+	key string,
+	val string,
+	logger *slog.Logger,
+) {
+	// 日志追踪 ID
+	logPre := util.GenerateRandomLetters(5)
+
+	// JSON 压缩（仅用于日志可读性）
+	if len(val) > 0 {
+		compact := new(bytes.Buffer)
+		if err := json.Compact(compact, []byte(val)); err != nil {
+			logger.Warn("压缩 JSON 失败",
+				slog.String("pre", logPre),
+				slog.Any("err", err),
+			)
+		}
+	}
+
+	logger.Info("[WATCH] event",
+		slog.String("pre", logPre),
+		slog.String("eventType", eventType),
+		slog.String("key", key),
+		slog.String("value", val),
+	)
+
+	var tel storage.NetworkTelemetry
+	if len(val) > 0 {
+		if err := json.Unmarshal([]byte(val), &tel); err != nil {
+			logger.Warn("解析节点JSON失败，跳过",
+				slog.String("pre", logPre),
+				slog.String("ip", key),
+				slog.Any("error", err),
+			)
+			return
+		}
+	}
+
+	switch eventType {
+	case "CREATE", "UPDATE":
+		r.AddNode(&tel, logPre)
+		r.DumpGraph(logPre)
+
+	case "DELETE":
+		r.RemoveNode(tel.PublicIP, logPre)
+		r.DumpGraph(logPre)
+
+	default:
+		logger.Warn("[WATCH] UNKNOWN eventType",
+			slog.String("pre", logPre),
+			slog.String("eventType", eventType),
+			slog.String("key", key),
+		)
+	}
+}
 
 func main() {
 
@@ -28,8 +126,10 @@ func main() {
 	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
 		panic("无法创建日志目录: " + err.Error())
 	}
+
 	logFilePath := filepath.Join(logDir, "app.log")
 	logFilePath1 := filepath.Join(logDir, "envoy.log")
+
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		panic("无法打开日志文件: " + err.Error())
@@ -38,13 +138,32 @@ func main() {
 	if err != nil {
 		panic("无法打开日志文件: " + err.Error())
 	}
+
+	// 2. 配置基础TextHandler（保留原有Level等配置）
+	baseHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{
+		Level:     slog.LevelInfo, // 日志级别
+		AddSource: true,           // 必须开启！否则无法获取文件名/行号
+	})
+	baseHandler1 := slog.NewTextHandler(logFile1, &slog.HandlerOptions{
+		Level:     slog.LevelInfo, // 日志级别
+		AddSource: true,           // 必须开启！否则无法获取文件名/行号
+	})
+
+	// 3. 包装成自定义SourceHandler（添加文件名、行号、函数名）
+	logger := slog.New(&SourceHandler{handler: baseHandler})
+	logger1 := slog.New(&SourceHandler{handler: baseHandler1})
+
+	// 4. 设置为全局logger（可选，整个项目都能生效）
+	slog.SetDefault(logger)
+	slog.SetDefault(logger1)
+
 	// 初始化日志，输出到 log/app.log
-	logger := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	logger1 := slog.New(slog.NewTextHandler(logFile1, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	//logger := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
+	//	Level: slog.LevelInfo,
+	//}))
+	//logger1 := slog.New(slog.NewTextHandler(logFile1, &slog.HandlerOptions{
+	//	Level: slog.LevelInfo,
+	//}))
 
 	// 初始化标记
 	logPre := "init"
@@ -198,62 +317,4 @@ func main() {
 	}
 
 	return
-}
-
-func HandleRoutingWatchEvent(
-	r *routing.GraphManager,
-	eventType string,
-	key string,
-	val string,
-	logger *slog.Logger,
-) {
-	// 日志追踪 ID
-	logPre := util.GenerateRandomLetters(5)
-
-	// JSON 压缩（仅用于日志可读性）
-	if len(val) > 0 {
-		compact := new(bytes.Buffer)
-		if err := json.Compact(compact, []byte(val)); err != nil {
-			logger.Warn("压缩 JSON 失败",
-				slog.String("pre", logPre),
-				slog.Any("err", err),
-			)
-		}
-	}
-
-	logger.Info("[WATCH] event",
-		slog.String("pre", logPre),
-		slog.String("eventType", eventType),
-		slog.String("key", key),
-		slog.String("value", val),
-	)
-
-	var tel storage.NetworkTelemetry
-	if len(val) > 0 {
-		if err := json.Unmarshal([]byte(val), &tel); err != nil {
-			logger.Warn("解析节点JSON失败，跳过",
-				slog.String("pre", logPre),
-				slog.String("ip", key),
-				slog.Any("error", err),
-			)
-			return
-		}
-	}
-
-	switch eventType {
-	case "CREATE", "UPDATE":
-		r.AddNode(&tel, logPre)
-		r.DumpGraph(logPre)
-
-	case "DELETE":
-		r.RemoveNode(tel.PublicIP, logPre)
-		r.DumpGraph(logPre)
-
-	default:
-		logger.Warn("[WATCH] UNKNOWN eventType",
-			slog.String("pre", logPre),
-			slog.String("eventType", eventType),
-			slog.String("key", key),
-		)
-	}
 }

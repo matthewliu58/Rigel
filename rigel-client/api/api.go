@@ -11,6 +11,7 @@ import (
 	"rigel-client/config"
 	"rigel-client/upload"
 	"rigel-client/util"
+	"time"
 )
 
 const (
@@ -19,6 +20,9 @@ const (
 
 // TransferConfig 适配Form表单传输的文件传输配置结构体
 type TransferConfig struct {
+	Username string `json:"username"` // 客户端用户名
+	Priority int    `json:"priority"` // 优先级
+
 	// ------------- 核心Form参数 -------------
 	FileName       string `json:"file_name" form:"file_name"`               // 源文件名（如test.zip）
 	FileStart      int64  `json:"file_start" form:"file_start"`             // 文件起始偏移（字节，默认0）
@@ -56,6 +60,8 @@ type TransferConfig struct {
 		} `json:"file_sys" form:"file_sys"`
 	} `json:"target" form:"target"`
 
+	EndPoints util.EndPoints `json:"end_points"`
+
 	// ------------- 传输通用配置 -------------
 	//Transfer struct {
 	//	ChunkSize   int64 `json:"chunk_size" form:"chunk_size"`     // 分块大小（字节，默认512MB）
@@ -73,7 +79,7 @@ var (
 // ParseHeadersAndBuildUploadInfo 一站式处理请求头解析、校验、UploadInfo构造
 // 入参：Gin上下文、日志前缀、日志器
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
-func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (upload.UploadInfo, bool, error) {
+func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (upload.UploadInfo, util.EndPoints, error) {
 
 	fileName := c.GetHeader(util.HeaderFileName)
 	logger.Info("Start parsing headers and building upload info", slog.String("pre", pre),
@@ -84,7 +90,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
+		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
 	}
 
 	logger.Info("TransferConfig", slog.String("pre", pre), slog.Any("req", req))
@@ -108,7 +114,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 			errMsg := fmt.Sprintf("Missing required header: %s", header)
 			logger.Error(errMsg, slog.String("pre", pre))
 			c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-			return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
+			return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
 		}
 	}
 
@@ -119,7 +125,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 			sourceType, []string{util.GCPCLoud, util.RemoteDisk, util.LocalDisk})
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
+		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
 	}
 
 	validDestTypes := map[string]bool{util.GCPCLoud: true, util.RemoteDisk: true}
@@ -128,7 +134,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 			destType, []string{util.GCPCLoud, util.RemoteDisk})
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, true, fmt.Errorf(errMsg)
+		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
 	}
 
 	//logger.Info("Header parse success", slog.String("pre", pre),
@@ -167,7 +173,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 	}
 
 	//logger.Info("UploadInfo built success", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
-	return uploadInfo, false, nil
+	return uploadInfo, req.EndPoints, nil
 }
 
 // V2ClientUploadHandler V2版本客户端直传文件处理器
@@ -213,34 +219,34 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一标识，用于日志追踪
-		requestID := util.GenerateRandomLetters(5)
-		logger.Info("V1ProxyUploadHandler start", slog.String("requestID", requestID))
+		pre := util.GenerateRandomLetters(5)
+		logger.Info("V1ProxyUploadHandler start", slog.String("pre", pre))
 
 		// 1. 解析请求头和请求体，构建上传基础信息
-		uploadInfo, _, err := parseRequest(c, requestID, logger)
+		uploadInfo, endPoints, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
 		if err != nil {
-			return // 错误已在子函数中处理并返回响应
+			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
 
 		// 2. 调用B服务获取路由信息
-		routingInfo, err := getRoutingInfoFromServiceB(c, requestID, logger)
+		routingInfo, err := getRoutingInfoFromServiceB(uploadInfo.File.FileName, endPoints, pre, logger)
 		if err != nil {
-			handleError(c, logger, requestID, http.StatusInternalServerError, "get routing info failed", err)
+			handleError(c, logger, pre, http.StatusInternalServerError, "get routing info failed", err)
 			return
 		}
 		if len(routingInfo.Routing) == 0 {
-			handleError(c, logger, requestID, http.StatusBadRequest, "routing info is empty", nil)
+			handleError(c, logger, pre, http.StatusBadRequest, "routing info is empty", nil)
 			return
 		}
 
 		// 3. 上传文件到C服务
-		if err := upload.Upload(uploadInfo, upload.UploadRedirectImp, routingInfo, false, requestID, logger); err != nil {
-			handleError(c, logger, requestID, http.StatusInternalServerError, "upload to service C failed", err)
+		if err := upload.Upload(uploadInfo, upload.UploadRedirectImp, routingInfo, false, pre, logger); err != nil {
+			handleError(c, logger, pre, http.StatusInternalServerError, "upload to service C failed", err)
 			return
 		}
 
 		// 4. 返回成功响应
-		logger.Info("V1ProxyUploadHandler success", slog.String("requestID", requestID),
+		logger.Info("V1ProxyUploadHandler success", slog.String("pre", pre),
 			slog.String("fileName", uploadInfo.File.FileName),
 			slog.String("objectName", uploadInfo.File.NewFileName))
 		c.JSON(http.StatusOK, gin.H{
@@ -251,65 +257,26 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
-// parseRequest 解析请求头、请求体，构建上传信息并记录日志
-func parseRequest(c *gin.Context, requestID string, logger *slog.Logger) (upload.UploadInfo, []byte, error) {
-
-	var uploadInfo upload.UploadInfo
-	var err error
-
-	// 解析Header构建UploadInfo
-	uploadInfo, _, err = ParseHeadersAndBuildUploadInfo(c, requestID, logger)
-	if err != nil {
-		handleError(c, logger, requestID, http.StatusBadRequest, "parse headers failed", err)
-		return uploadInfo, nil, err
-	}
-
-	// 读取并解析请求体
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		handleError(c, logger, requestID, http.StatusBadRequest, "read request body failed", err)
-		return uploadInfo, nil, err
-	}
-
-	// 解析请求体为UserRouteRequest（仅用于日志）
-	var req util.UserRouteRequest
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		handleError(c, logger, requestID, http.StatusBadRequest, "unmarshal request body failed", err)
-		return uploadInfo, nil, err
-	}
-	logger.Info("parse request success", slog.String("requestID", requestID), slog.Any("userRequest", req))
-
-	return uploadInfo, bodyBytes, nil
-}
-
 // getRoutingInfoFromServiceB 调用B服务获取路由信息
-func getRoutingInfoFromServiceB(c *gin.Context, requestID string, logger *slog.Logger) (util.RoutingInfo, error) {
-	// 重新读取请求体（避免流已关闭）
-	bodyBytes, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		return util.RoutingInfo{}, err
-	}
+func getRoutingInfoFromServiceB(filename string, endPoints util.EndPoints, pre string, logger *slog.Logger) (util.RoutingInfo, error) {
 
 	// 构建调用B服务的请求
-	req, err := http.NewRequest("POST", config.Config_.ControlHost+RoutingURL, bytes.NewReader(bodyBytes))
+	reqBodyBytes, _ := json.Marshal(endPoints)
+	req, err := http.NewRequest("POST", config.Config_.ControlHost+RoutingURL, bytes.NewReader(reqBodyBytes))
 	if err != nil {
-		logger.Error("build service B request failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		logger.Error("build service B request failed", slog.String("pre", pre), slog.String("err", err.Error()))
 		return util.RoutingInfo{}, err
 	}
 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
-	var userReq util.UserRouteRequest
-	_ = json.Unmarshal(bodyBytes, &userReq) // 仅用于设置Header，忽略错误（已在parseRequest校验）
-	req.Header.Set(util.HeaderFileName, userReq.FileName)
-	req.Header.Set(util.ClientIP, userReq.ClientIP)
-	req.Header.Set(util.UserName, userReq.Username)
+	req.Header.Set(util.HeaderFileName, filename)
 
 	// 发送请求到B服务
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("call service B failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		logger.Error("call service B failed", slog.String("pre", pre), slog.String("err", err.Error()))
 		return util.RoutingInfo{}, err
 	}
 	defer resp.Body.Close()
@@ -317,37 +284,37 @@ func getRoutingInfoFromServiceB(c *gin.Context, requestID string, logger *slog.L
 	// 读取B服务响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error("read service B response failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		logger.Error("read service B response failed", slog.String("pre", pre), slog.String("err", err.Error()))
 		return util.RoutingInfo{}, err
 	}
 
 	// 解析B服务响应
 	var apiResp util.ApiResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		logger.Error("unmarshal service B response failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		logger.Error("unmarshal service B response failed", slog.String("pre", pre), slog.String("err", err.Error()))
 		return util.RoutingInfo{}, err
 	}
 
 	// 解析路由信息
 	reqDataBytes, _ := json.Marshal(apiResp.Data)
-	logger.Info("get service B response", slog.String("requestID", requestID), slog.String("responseData", string(reqDataBytes)))
+	logger.Info("get service B response", slog.String("pre", pre), slog.String("responseData", string(reqDataBytes)))
 	var routingInfo util.RoutingInfo
 	if err := json.Unmarshal(reqDataBytes, &routingInfo); err != nil {
-		logger.Error("unmarshal routing info failed", slog.String("requestID", requestID), slog.String("err", err.Error()))
+		logger.Error("unmarshal routing info failed", slog.String("pre", pre), slog.String("err", err.Error()))
 		return util.RoutingInfo{}, err
 	}
 
-	logger.Info("get routing info success", slog.String("requestID", requestID), slog.Any("routingInfo", routingInfo))
+	logger.Info("get routing info success", slog.String("pre", pre), slog.Any("routingInfo", routingInfo))
 	return routingInfo, nil
 }
 
 // handleError 统一错误处理：记录日志并返回标准化响应
-func handleError(c *gin.Context, logger *slog.Logger, requestID string, statusCode int, msg string, err error) {
+func handleError(c *gin.Context, logger *slog.Logger, pre string, statusCode int, msg string, err error) {
 	errMsg := msg
 	if err != nil {
 		errMsg = msg + ": " + err.Error()
 	}
-	logger.Error(errMsg, slog.String("requestID", requestID))
+	logger.Error(errMsg, slog.String("pre", pre))
 	c.JSON(statusCode, gin.H{
 		"error": errMsg,
 	})

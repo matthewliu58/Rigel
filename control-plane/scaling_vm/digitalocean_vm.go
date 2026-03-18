@@ -77,7 +77,7 @@ func CreateDigitalOceanVM(
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
@@ -139,7 +139,7 @@ func GetDigitalOceanVMExternalIP(
 
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
@@ -194,7 +194,7 @@ func DeleteDigitalOceanVM(
 
 	req.Header.Set("Authorization", "Bearer "+apiToken)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

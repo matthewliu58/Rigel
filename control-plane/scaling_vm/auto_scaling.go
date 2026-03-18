@@ -485,7 +485,7 @@ func sendAddTargetIpsRequest(targetIps []envoy_manager.EnvoyTargetAddr,
 	req.Header.Set("Action", action) // <- 这里加上 action
 
 	// 发送请求
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)

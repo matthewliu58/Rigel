@@ -71,9 +71,9 @@ func main() {
 		logger.Info("读取配置文件成功", slog.String("pre", logPre),
 			slog.String("config", string(b)))
 	}
-	envoy_manager.EnvoyPath = util.Config_.EnvoyPath
-	envoy_manager.DefaultConfig = util.Config_.DefaultConfig
-	envoy_manager.EnvoyLog = util.Config_.EnvoyLog
+	//envoy_manager.EnvoyPath = util.Config_.EnvoyPath
+	//envoy_manager.DefaultConfig = util.Config_.DefaultConfig
+	//envoy_manager.EnvoyLog = util.Config_.EnvoyLog
 
 	// 2. 初始化Gin路由
 	router := gin.Default()

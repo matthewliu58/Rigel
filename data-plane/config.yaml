@@ -1,4 +1,4 @@
-envoy_path: "/home/matth/envoy"
+#envoy_path: "/home/matth/envoy"
 control_host: "http://127.0.0.1:8081"
-default_config:  "/home/matth/envoy-mini.yaml"
-envoy_log: "/home/matth/envoy.log"
+#default_config:  "/home/matth/envoy-mini.yaml"
+#envoy_log: "/home/matth/envoy.log"

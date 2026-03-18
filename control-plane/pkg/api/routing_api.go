@@ -46,13 +46,11 @@ func (h *UserRoutingAPIHandler) GetUserRoute(c *gin.Context) {
 		Data: nil,
 	}
 
-	// 1️⃣ 解析 header 信息（如果有）
-	clientIP := c.GetHeader("X-Client-IP")
+	// 解析 header 信息（如果有）
 	filename := c.GetHeader("X-File-Name")
-	username := c.GetHeader("X-User-Name")
 
-	// 2️⃣ 解析 body JSON
-	var req util.UserRouteRequest
+	// 解析 body JSON
+	var req util.EndPoints
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Code = 400
 		resp.Msg = "请求体解析失败：" + err.Error()
@@ -62,23 +60,11 @@ func (h *UserRoutingAPIHandler) GetUserRoute(c *gin.Context) {
 		return
 	}
 
-	h.Logger.Info("UserRoute POST request",
-		slog.String("pre", pre),
-		"clientIP", clientIP,
-		"username", username,
-		"fileName", filename,
-		"priority", req.Priority,
-		"clientContinent", req.ClientCont,
-		"serverIP", req.ServerIP, //ip:port or domain
-		//"serverContinent", req.ServerCont,
-		"cloudProvider", req.CloudProvider,
-		"cloudRegion", req.CloudRegion,
-		"cloudCity", req.CloudCity,
-	)
+	h.Logger.Info("UserRoute POST request", slog.String("pre", pre),
+		slog.String("fileName", filename), slog.Any("endPoints", req))
 
-	// 3️⃣ 调用 GraphManager 获取最优路径
-	// 可以把 GetBestPath 改成支持从客户端到服务器
-	paths := h.GM.Routing(req.ClientCont, req, pre, h.Logger)
+	//调用 GraphManager 获取最优路径 可以把 GetBestPath 改成支持从客户端到服务器
+	paths := h.GM.Routing(req.CloudRegion, req, pre, h.Logger)
 
 	h.Logger.Info("UserRoute POST response", slog.String("pre", pre),
 		slog.Any("routing", paths))

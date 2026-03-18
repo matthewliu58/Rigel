@@ -303,9 +303,7 @@ func UploadToGCSbyProxy(
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
 	// 发送请求
-	client := &http.Client{
-		Timeout: 1 * time.Minute,
-	}
+	client := &http.Client{Timeout: 1 * time.Minute}
 	logger.Info("send HTTP request to proxy",
 		slog.String("pre", pre),
 		slog.String("url", url),

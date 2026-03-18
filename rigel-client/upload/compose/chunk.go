@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"rigel-client/util"
+	"time"
 )
 
 // 定义和服务端一致的Header常量
@@ -75,7 +76,7 @@ func ChunkMergeClient(ctx context.Context, serverURL, finalFileName string,
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 
 	// 4. 创建HTTP客户端并发送请求
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, fmt.Errorf("发送请求失败: %v", err)
