@@ -2,9 +2,9 @@ package envoy_manager
 
 // PortRateLimitConfig 端口维度限流配置
 type PortRateLimitConfig struct {
-	//Enabled   bool     `json:"enabled"`   // 是否开启限流
-	//QPS       int64    `json:"qps"`       // 每秒请求数限制
-	//Burst     int64    `json:"burst"`     // 突发请求数
+	//Enabled bool `json:"enabled"` // 是否开启限流
+	//QPS int64 `json:"qps"` // 每秒请求数限制
+	//Burst int64 `json:"burst"` // 突发请求数
 	//Whitelist []string `json:"whitelist"` // 白名单IP
 	Bandwidth int64 `json:"bandwidth"` // 带宽限制 单位 Bytes/s, 1 Mbps = 125000 Bytes/s
 }

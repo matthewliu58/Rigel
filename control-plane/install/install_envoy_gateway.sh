@@ -13,12 +13,12 @@ set -euo pipefail
 # 1. 常量定义
 # --------------------------
 ENVOY_VERSION="1.28.0"
-ENVOY_HOME="/home/matth"
+ENVOY_HOME="/root"
 ENVOY_BIN="${ENVOY_HOME}/envoy"
 ENVOY_CONFIG="${ENVOY_HOME}/envoy-mini.yaml"
 DOWNLOAD_URL=""
 LUA_SCRIPT_PATH="${ENVOY_HOME}/access_router.lua"
-OWNER="matth:matth"
+OWNER="root:root"
 
 # --------------------------
 # 2. 架构检测

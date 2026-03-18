@@ -14,7 +14,7 @@ admin:
     socket_address:
       address: 0.0.0.0
       port_value: {{.AdminPort}}
-  # ⚠ 可选：deprecated，但目前还能用
+  # 可选：deprecated，但目前还能用
   access_log_path: "{{$.PathBase}}/admin_access.log"
   profile_path: "{{$.PathBase}}/profile"
 
@@ -46,7 +46,7 @@ static_resources:
 
                 stat_prefix: ingress_http_{{.Port}}
 
-                # ✅ 正确字段名：access_log（不是 access_logs）
+                # 正确字段名：access_log（不是 access_logs）
                 access_log:
                   - name: envoy.access_logs.file
                     typed_config:
@@ -94,7 +94,7 @@ static_resources:
       type: STATIC
       lb_policy: ROUND_ROBIN
 
-      # ✅ 健康检查只允许在 cluster.health_checks
+      # 健康检查只允许在 cluster.health_checks
       health_checks:
         - timeout: 1s
           interval: 5s

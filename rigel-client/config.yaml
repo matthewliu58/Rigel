@@ -1,6 +1,6 @@
 port: "8080"
 control_host: "http://127.0.0.1:8081"
-local_base_dir: "/home/matth/storage/"
+local_base_dir: "/root/storage/"
 
 # SSH配置（远端文件读取用）
 #ssh:
