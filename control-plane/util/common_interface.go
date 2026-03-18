@@ -6,7 +6,7 @@ type ProbeTask struct {
 	IP         string
 	Port       int
 	Region     string // cloud storage 用，node 可为空
-	City       string // cloud storage 用，node 可为空
+	ID         string // cloud storage 用，node 可为空
 }
 
 type EndPoints struct {

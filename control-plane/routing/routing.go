@@ -21,12 +21,17 @@ func (g *GraphManager) Routing(endPoints util.EndPoints, pre string, logger *slo
 	var startNodes []*storage.NetworkTelemetry
 
 	for _, node := range allNodes {
+		//proxy部署client逻辑
+		if node.PublicIP == endPoints.ClientIP {
+			startNodes = append(startNodes, node)
+			break
+		}
 		if node.Continent == endPoints.ClientRegion {
 			startNodes = append(startNodes, node)
 		}
 	}
 
-	//client所在大区没有接入点 直接公网传输
+	//todo 即使client所在区域没有覆盖也可以提供routing
 	if len(startNodes) == 0 {
 		logger.Warn("No nodes found for start continent", slog.String("pre", pre))
 		return util.RoutingInfo{}
@@ -91,12 +96,10 @@ func (g *GraphManager) Routing(endPoints util.EndPoints, pre string, logger *slo
 	merged += "," + endPoints.ServerIP
 
 	//计算速率
-	rate := ComputeAdmissionRate(Task{WeightU: 1, MinRate: 10, MaxRate: 20},
-		minCost, 1.0, 100, pre, g.logger)
 	var paths []util.PathInfo
+	rate := ComputeAdmissionRate(Task{WeightU: 1, MinRate: 10, MaxRate: 20}, minCost, 1.0, 100, pre, g.logger)
 	paths = append(paths, util.PathInfo{Hops: merged, Rate: int64(rate)})
 	rout := util.RoutingInfo{Routing: paths}
-	logger.Info("routing result", slog.String("pre", pre),
-		slog.Any("rout", rout))
+	logger.Info("routing result", slog.String("pre", pre), slog.Any("rout", rout))
 	return rout
 }

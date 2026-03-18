@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	cloudStorageProbeTargets = "cloud_storage_probe_targets.json"
+	probeTargets = "probe_targets.json"
 )
 
 var (
@@ -34,7 +34,7 @@ type CloudStorageTarget struct {
 	IP       string `json:"ip"`
 	Port     int    `json:"port"`
 	Region   string `json:"region"`
-	City     string `json:"city"`
+	ID       string `json:"id"`
 }
 
 //type ProbeTask struct {
@@ -57,7 +57,7 @@ func LoadCloudStorageTargetsFromExeDir() (map[string]CloudStorageTarget, error) 
 	exeDir := filepath.Dir(exePath)
 
 	// 3. 拼出配置文件完整路径
-	targetFile := filepath.Join(exeDir, cloudStorageProbeTargets)
+	targetFile := filepath.Join(exeDir, probeTargets)
 
 	// 4. 读取文件
 	data, err := os.ReadFile(targetFile)
@@ -140,7 +140,7 @@ func (h *NodeProbeAPIHandler) GetProbeTasks(c *gin.Context) {
 			IP:         v.IP,
 			Port:       v.Port,
 			Region:     v.Region,
-			City:       v.City,
+			ID:         v.ID,
 		})
 	}
 

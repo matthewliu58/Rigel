@@ -229,7 +229,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		// 2. 调用B服务获取路由信息
-		routingInfo, err := getRoutingInfoFromServiceB(uploadInfo.File.FileName, endPoints, pre, logger)
+		routingInfo, err := getRoutingInfoFromServiceControlPlane(uploadInfo.File.FileName, endPoints, pre, logger)
 		if err != nil {
 			handleError(c, logger, pre, http.StatusInternalServerError, "get routing info failed", err)
 			return
@@ -258,7 +258,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // getRoutingInfoFromServiceB 调用B服务获取路由信息
-func getRoutingInfoFromServiceB(filename string, endPoints util.EndPoints, pre string, logger *slog.Logger) (util.RoutingInfo, error) {
+func getRoutingInfoFromServiceControlPlane(filename string, endPoints util.EndPoints, pre string, logger *slog.Logger) (util.RoutingInfo, error) {
 
 	// 构建调用B服务的请求
 	reqBodyBytes, _ := json.Marshal(endPoints)
@@ -297,7 +297,7 @@ func getRoutingInfoFromServiceB(filename string, endPoints util.EndPoints, pre s
 
 	// 解析路由信息
 	reqDataBytes, _ := json.Marshal(apiResp.Data)
-	logger.Info("get service B response", slog.String("pre", pre), slog.String("responseData", string(reqDataBytes)))
+	logger.Info("get service control plane response", slog.String("pre", pre), slog.String("responseData", string(reqDataBytes)))
 	var routingInfo util.RoutingInfo
 	if err := json.Unmarshal(reqDataBytes, &routingInfo); err != nil {
 		logger.Error("unmarshal routing info failed", slog.String("pre", pre), slog.String("err", err.Error()))

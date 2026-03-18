@@ -3,6 +3,7 @@ package download
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"errors"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"log/slog"
@@ -263,7 +264,7 @@ func GetGCSObjectSize(ctx context.Context, bucketName, objectName, credFile, pre
 			slog.String("objectName", objectName),
 			slog.Any("err", err))
 		// 区分常见错误类型，返回更友好的提示
-		if err == storage.ErrObjectNotExist {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return 0, fmt.Errorf("object %s/%s 不存在: %w", bucketName, objectName, err)
 		}
 		return 0, fmt.Errorf("obj.Attrs failed: %w", err)

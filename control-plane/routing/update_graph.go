@@ -172,7 +172,7 @@ func (g *GraphManager) AddNode(node *storage.NetworkTelemetry, logPre string) {
 	for _, v := range node.LinksCongestion {
 		if v.Target.TargetType == "cloud_storage" {
 			pp, _ := util.GetBandwidthPrice(node.Provider, node.Continent, v.Target.Region, g.logger)
-			cloudFull := fmt.Sprintf("%s_%s_%s", v.Target.Provider, v.Target.Region, v.Target.City)
+			cloudFull := fmt.Sprintf("%s_%s_%s", v.Target.Provider, v.Target.Region, v.Target.ID)
 			line_ := out + "->" + cloudFull
 			r = EdgeRisk(0, pp, v.PacketLoss, logPre+"-"+line_, g.logger)
 			g.edges[line_] = &Edge{
@@ -257,12 +257,13 @@ func (g *GraphManager) DumpGraph(logPre string) {
 // Output:
 //
 //	A non-negative additive risk score (lower is better).
-func EdgeRisk(cacheUtil, cost, lossRate float64, logPre string, l *slog.Logger) float64 {
+func EdgeRisk(cacheUtil, cost, lossRate float64, pre string, l *slog.Logger) float64 {
 	// -----------------------------
 	// Policy constants (system values)
 	// -----------------------------
 
-	l.Info("EdgeRisk", slog.String("pre", logPre), "cacheUtil", cacheUtil, "cost", cost, "lossRate", lossRate)
+	l.Info("EdgeRisk", slog.String("pre", pre), slog.Any("cacheUtil", cacheUtil),
+		slog.Any("cost", cost), slog.Any("lossRate", lossRate))
 
 	const (
 		// Cache policy
@@ -298,7 +299,7 @@ func EdgeRisk(cacheUtil, cost, lossRate float64, logPre string, l *slog.Logger) 
 
 	r := wCache*cacheRisk + wCost*costRisk + wLoss*lossRisk
 
-	l.Info("EdgeRisk", slog.String("pre", logPre),
+	l.Info("EdgeRisk", slog.String("pre", pre),
 		slog.Float64("cacheRisk", cacheRisk),
 		slog.Float64("costRisk", costRisk),
 		slog.Float64("lossRisk", lossRisk),

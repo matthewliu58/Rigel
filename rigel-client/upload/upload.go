@@ -234,7 +234,7 @@ func StartChunkTimeoutChecker(
 
 // CollectExpiredChunks 保留pre入参，状态枚举替换Acked
 func CollectExpiredChunks(
-	//ctx context.Context,
+//ctx context.Context,
 	s *util.SafeMap,
 	expire time.Duration,
 	pre string, // 保留pre入参
@@ -585,18 +585,19 @@ func Upload(uploadInfo UploadInfo,
 
 	// 4. 文件分块
 	chunks := util.NewSafeMap()
-	chunkSize, err := split.SplitFilebyRange(fileSize, uploadInfo.File.Start, uploadInfo.File.Length,
+	_, err = split.SplitFilebyRange(fileSize, uploadInfo.File.Start, uploadInfo.File.Length,
 		uploadInfo.File.FileName, uploadInfo.File.NewFileName, noSplit, chunks, pre, logger)
 	if err != nil {
 		logger.Error("Split file failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("%w: %s", ErrChunkSplitFailed, err.Error())
 	}
 
-	//512MB判断是否内存传输
-	inMemory := false
-	if chunkSize >= ChunkSizeInMemory || uploadInfo.Source.SourceType == util.LocalDisk {
-		inMemory = true
-	}
+	//inMemory := false
+	//if chunkSize >= ChunkSizeInMemory || uploadInfo.Source.SourceType == util.LocalDisk {
+	//	inMemory = true
+	//}
+	//In-memory mode is enabled by default
+	inMemory := true
 
 	//启动定时重传 & check传输完毕
 	done := make(chan struct{})
