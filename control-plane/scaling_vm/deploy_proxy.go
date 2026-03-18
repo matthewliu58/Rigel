@@ -325,7 +325,7 @@ func startBinaryInBackground(
 		)
 
 	case <-time.After(3 * time.Second):
-		// 🚑 超时放行 —— 这是预期行为
+		//超时放行 —— 这是预期行为
 		logger.Warn("SSH session did not return, assume binary started",
 			slog.String("pre", pre),
 			slog.String("binary", binaryString_),
