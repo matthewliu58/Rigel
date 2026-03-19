@@ -12,9 +12,48 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
+
+// 自定义Handler：修复slog.Context为context.Context，兼容所有Go 1.21+版本
+type SourceHandler struct {
+	handler slog.Handler
+}
+
+// Handle 核心修复：把slog.Context改为context.Context
+func (h *SourceHandler) Handle(ctx context.Context, r slog.Record) error {
+	// 采集调用日志的位置（跳过当前Handler的栈帧，取真实业务代码的位置）
+	fs := runtime.CallersFrames([]uintptr{r.PC})
+	frame, _ := fs.Next()
+
+	// 只保留文件名（去掉全路径）
+	fileName := filepath.Base(frame.File)
+
+	// 向日志记录中添加源位置字段
+	r.AddAttrs(
+		slog.String("file", fileName),          // 文件名
+		slog.Int("line", frame.Line),           // 行号
+		slog.String("func", frame.Func.Name()), // 函数名（可选）
+	)
+
+	// 交给底层TextHandler输出
+	return h.handler.Handle(ctx, r)
+}
+
+// 以下是slog.Handler接口的默认实现（全部修正为context.Context）
+func (h *SourceHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.handler.Enabled(ctx, level)
+}
+
+func (h *SourceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &SourceHandler{handler: h.handler.WithAttrs(attrs)}
+}
+
+func (h *SourceHandler) WithGroup(name string) slog.Handler {
+	return &SourceHandler{handler: h.handler.WithGroup(name)}
+}
 
 func InitEnvoy(logger, logger1 *slog.Logger) {
 	// 创建启动器
@@ -53,12 +92,24 @@ func main() {
 	//}
 
 	// 初始化日志，输出到 log/app.log
-	logger := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	//logger := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
+	//	Level: slog.LevelInfo,
+	//}))
 	//logger1 := slog.New(slog.NewTextHandler(logFile1, &slog.HandlerOptions{
 	//	Level: slog.LevelInfo,
 	//}))
+
+	// 2. 配置基础TextHandler（保留原有Level等配置）
+	baseHandler := slog.NewTextHandler(logFile, &slog.HandlerOptions{
+		Level:     slog.LevelInfo, // 日志级别
+		AddSource: true,           // 必须开启！否则无法获取文件名/行号
+	})
+
+	// 3. 包装成自定义SourceHandler（添加文件名、行号、函数名）
+	logger := slog.New(&SourceHandler{handler: baseHandler})
+
+	// 4. 设置为全局logger（可选，整个项目都能生效）
+	slog.SetDefault(logger)
 
 	logPre := "init"
 
