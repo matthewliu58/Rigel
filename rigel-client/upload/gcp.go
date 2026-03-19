@@ -12,8 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"rigel-client/limit_rate"
+	"rigel-client/util"
 	"strings"
 	"time"
+)
+
+const (
+	gcpScopes = "https://www.googleapis.com/auth/devstorage.full_control"
+	gcpCred   = "GOOGLE_APPLICATION_CREDENTIALS"
 )
 
 // UploadToGCSbyClient 上传数据到GCS（支持本地文件/内存流式两种模式，含pre日志前缀）
@@ -57,7 +63,7 @@ func UploadToGCSbyClient(
 	}
 
 	// 设置GCS凭证
-	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
+	os.Setenv(gcpCred, credFile)
 
 	// 创建GCS客户端（传入ctx，支持取消客户端创建过程）
 	ctx_, cancel := context.WithTimeout(ctx, 1*time.Minute) // 避免卡住
@@ -263,21 +269,17 @@ func UploadToGCSbyProxy(
 		return fmt.Errorf("read cred file: %w", err)
 	}
 
-	creds, err := google.CredentialsFromJSON(
-		ctx,
-		jsonBytes,
-		"https://www.googleapis.com/auth/devstorage.full_control",
-	)
+	reds, err := google.CredentialsFromJSON(ctx, jsonBytes, gcpScopes)
 	if err != nil {
-		logger.Error("parse GCP credentials failed",
+		logger.Error("Parse GCP credentials failed",
 			slog.String("pre", pre),
 			slog.Any("err", err))
 		return fmt.Errorf("parse credentials: %w", err)
 	}
 
-	token, err := creds.TokenSource.Token()
+	token, err := reds.TokenSource.Token()
 	if err != nil {
-		logger.Error("get GCP token failed",
+		logger.Error("Get GCP token failed",
 			slog.String("pre", pre),
 			slog.Any("err", err))
 		return fmt.Errorf("get token: %w", err)
@@ -287,7 +289,7 @@ func UploadToGCSbyProxy(
 	// ---------------------- 6. 构造并发送HTTP请求 ----------------------
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, rateLimitedBody)
 	if err != nil {
-		logger.Error("create HTTP request failed",
+		logger.Error("Create HTTP request failed",
 			slog.String("pre", pre),
 			slog.Any("err", err))
 		return fmt.Errorf("new request: %w", err)
@@ -296,15 +298,15 @@ func UploadToGCSbyProxy(
 	// 设置请求头
 	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("X-Hops", hops)
-	req.Header.Set("X-Chunk-Index", "1")
-	req.Header.Set("X-Rate-Limit-Enable", "true")
-	req.Header.Set("X-Source-Type", task.Source.SourceType)
+	req.Header.Set(util.HeaderXHops, hops)
+	req.Header.Set(util.HeaderXChunkIndex, "1")
+	req.Header.Set(util.HeaderXRateLimitEnable, "true")
+	req.Header.Set(util.HeaderXSourceType, task.Source.SourceType)
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
 	// 发送请求
 	client := &http.Client{Timeout: 1 * time.Minute}
-	logger.Info("send HTTP request to proxy",
+	logger.Info("Send HTTP request to proxy",
 		slog.String("pre", pre),
 		slog.String("url", url),
 		slog.String("timeout", "5m"))
@@ -324,12 +326,12 @@ func UploadToGCSbyProxy(
 		respBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
 			respBody = []byte("failed to read response body")
-			logger.Error("read error response failed",
+			logger.Error("Read error response failed",
 				slog.String("pre", pre),
 				slog.Any("err", readErr))
 		}
 		err := fmt.Errorf("upload failed: %d %s", resp.StatusCode, string(respBody))
-		logger.Error("upload to GCS by proxy failed",
+		logger.Error("Upload to GCS by proxy failed",
 			slog.String("pre", pre),
 			slog.Int("statusCode", resp.StatusCode),
 			slog.String("response", string(respBody)))

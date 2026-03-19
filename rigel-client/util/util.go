@@ -15,15 +15,17 @@ import (
 )
 
 const (
-	GCPCLoud        = "gcp-cloud"
-	RemoteDisk      = "remote-disk"
-	LocalDisk       = "local-disk"
-	HeaderFileName  = "X-File-Name"  // 最终合并后的文件名
-	HeaderChunkName = "X-Chunk-Name" // 单个分片的自定义名称
-	DataSourceType  = "X-Data-Source-Type"
-	DataDestType    = "X-Data-Dest-Type"
-	ClientIP        = "X-Client-IP"
-	UserName        = "X-User-Name"
+	GCPCLoud               = "gcp-cloud"
+	RemoteDisk             = "remote-disk"
+	LocalDisk              = "local-disk"
+	HeaderFileName         = "X-File-Name"  // 最终合并后的文件名
+	HeaderChunkName        = "X-Chunk-Name" // 单个分片的自定义名称
+	DataSourceType         = "X-Data-Source-Type"
+	DataDestType           = "X-Data-Dest-Type"
+	HeaderXHops            = "X-Hops"
+	HeaderXChunkIndex      = "X-Chunk-Index"
+	HeaderXRateLimitEnable = "X-Rate-Limit-Enable"
+	HeaderXSourceType      = "X-Source-Type"
 )
 
 type ApiResponse struct {

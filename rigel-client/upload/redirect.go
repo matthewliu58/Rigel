@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func UploadRedirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
+func RedirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 
 	logger.Info("UploadRedirectImp", slog.String("pre", pre), slog.Any("task", task))
 

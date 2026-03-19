@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func UploadDirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
+func DirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 	logger.Info("UploadDirectImp", slog.String("pre", pre), slog.String("index", task.Index)) // 优化：只打印index，避免task序列化过大
 
 	// --------------- 第一步：初始状态设置（Acked=1）---------------

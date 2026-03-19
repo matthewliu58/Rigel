@@ -75,7 +75,7 @@ func main() {
 
 	logDir := "log"
 	_ = os.MkdirAll(logDir, 0755)
-	logFile, err := os.OpenFile(logDir+"/client.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(logDir+"/app.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		panic(err)
 	}

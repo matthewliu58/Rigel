@@ -234,7 +234,7 @@ func StartChunkTimeoutChecker(
 
 // CollectExpiredChunks 保留pre入参，状态枚举替换Acked
 func CollectExpiredChunks(
-	//ctx context.Context,
+//ctx context.Context,
 	s *util.SafeMap,
 	expire time.Duration,
 	pre string, // 保留pre入参
@@ -385,8 +385,8 @@ func (p *WorkerPool) Stop() {
 
 // ChunkEventLoop 保留pre入参，状态枚举替换Acked + 监听取消信号
 func ChunkEventLoop(ctx context.Context, chunks *util.SafeMap, workerPool *WorkerPool,
-	uploadInfo UploadInfo, events <-chan ChunkEvent, done chan struct{}, pre string, // 保留pre入参
-	logger *slog.Logger) {
+	uploadInfo UploadInfo, events <-chan ChunkEvent, done chan struct{}, inMemory bool,
+	pre string, logger *slog.Logger) {
 
 	logger.Info("ChunkEventLoop", slog.String("pre", pre))
 
@@ -448,8 +448,10 @@ func ChunkEventLoop(ctx context.Context, chunks *util.SafeMap, workerPool *Worke
 				close(done)
 
 				//清理临时文件
-				if uploadInfo.Dest.DestType == util.GCPCLoud || uploadInfo.Dest.DestType == util.RemoteDisk {
-					_ = util.DeleteFilesInDir(uploadInfo.LocalBaseDir, parts, pre, logger)
+				if !inMemory {
+					if uploadInfo.Dest.DestType == util.GCPCLoud || uploadInfo.Dest.DestType == util.RemoteDisk {
+						_ = util.DeleteFilesInDir(uploadInfo.LocalBaseDir, parts, pre, logger)
+					}
 				}
 
 				return
@@ -611,7 +613,7 @@ func Upload(uploadInfo UploadInfo,
 	defer workerPool.Stop() // 核心修复2：退出时终止协程池
 
 	//events 消费（传入带超时的ctx）
-	go ChunkEventLoop(ctx, chunks, workerPool, uploadInfo, events, done, pre, logger)
+	go ChunkEventLoop(ctx, chunks, workerPool, uploadInfo, events, done, inMemory, pre, logger)
 
 	// 4. 启动分片上传（传入带超时的ctx）
 	go StartChunkSubmitLoop(ctx, chunks, workerPool, uploadInfo, false, nil, pre, logger)
@@ -621,19 +623,19 @@ func Upload(uploadInfo UploadInfo,
 	// 核心修复3：监听ctx.Done()而非time.After，统一超时逻辑
 	select {
 	case <-done:
-		logger.Info("Function 正常完成", slog.String("pre", pre), slog.String("newFileName", newFileName))
+		logger.Info("Function finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
 	case <-ctx.Done():
 		// 超时/取消触发
 		err := ctx.Err()
-		if err == context.DeadlineExceeded {
-			logger.Warn("超时退出", slog.String("pre", pre), slog.String("newFileName", newFileName))
+		if errors.Is(err, context.DeadlineExceeded) {
+			logger.Warn("Timeout exit", slog.String("pre", pre), slog.String("newFileName", newFileName))
 			return fmt.Errorf("%w: %s", ErrUploadTimeout, newFileName)
 		}
 		logger.Info("Upload canceled", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("upload canceled: %w", err)
 	}
 
-	logger.Info("主程序执行完毕", slog.String("pre", pre), slog.String("newFileName", newFileName))
+	logger.Info("Main program finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
 	return nil
 }
 

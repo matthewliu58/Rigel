@@ -20,14 +20,15 @@ const (
 
 // TransferConfig 适配Form表单传输的文件传输配置结构体
 type TransferConfig struct {
-	Username string `json:"username"` // 客户端用户名
-	Priority int    `json:"priority"` // 优先级
+	Username string `json:"username" form:"username"` // 客户端用户名
+	Priority int    `json:"priority" form:"priority"` // 优先级
 
 	// ------------- 核心Form参数 -------------
-	FileName       string `json:"file_name" form:"file_name"`               // 源文件名（如test.zip）
-	FileStart      int64  `json:"file_start" form:"file_start"`             // 文件起始偏移（字节，默认0）
-	FileLength     int64  `json:"file_length" form:"file_length"`           // 文件传输长度（字节，0=整个文件）
-	NewFileName    string `json:"new_file_name" form:"new_file_name"`       // 目标文件名
+	FileName    string `json:"file_name" form:"file_name"`         // 源文件名（如test.zip）
+	FileStart   int64  `json:"file_start" form:"file_start"`       // 文件起始偏移（字节，默认0）
+	FileLength  int64  `json:"file_length" form:"file_length"`     // 文件传输长度（字节，0=整个文件）
+	NewFileName string `json:"new_file_name" form:"new_file_name"` // 目标文件名
+
 	DataSourceType string `json:"data_source_type" form:"data_source_type"` // 源类型
 	DataDestType   string `json:"data_dest_type" form:"data_dest_type"`     // 目标类型
 
@@ -60,7 +61,7 @@ type TransferConfig struct {
 		} `json:"file_sys" form:"file_sys"`
 	} `json:"target" form:"target"`
 
-	EndPoints util.EndPoints `json:"end_points"`
+	EndPoints util.EndPoints `json:"end_points" form:"end_points"`
 
 	// ------------- 传输通用配置 -------------
 	//Transfer struct {
@@ -195,7 +196,7 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		// 2. 调用客户端直传实现上传文件到存储服务（C服务）
 		// UploadDirectImp：客户端直传实现（区别于V1的代理转发实现）
 		// 参数说明：uploadInfo-上传信息；UploadDirectImp-直传实现函数；true-是否开启并发；requestID-请求标识；logger-日志实例
-		if err := upload.Upload(uploadInfo, upload.UploadDirectImp, util.RoutingInfo{}, false, requestID, logger); err != nil {
+		if err := upload.Upload(uploadInfo, upload.DirectImp, util.RoutingInfo{}, false, requestID, logger); err != nil {
 			logger.Error("client direct upload failed", slog.String("requestID", requestID), slog.Any("err", err))
 			// 返回500内部错误，携带具体错误信息
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -240,7 +241,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		// 3. 上传文件到C服务
-		if err := upload.Upload(uploadInfo, upload.UploadRedirectImp, routingInfo, false, pre, logger); err != nil {
+		if err := upload.Upload(uploadInfo, upload.RedirectImp, routingInfo, false, pre, logger); err != nil {
 			handleError(c, logger, pre, http.StatusInternalServerError, "upload to service C failed", err)
 			return
 		}
