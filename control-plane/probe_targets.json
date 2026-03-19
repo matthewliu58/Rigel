@@ -1,9 +1,9 @@
 [
   {
     "provider": "gcp",
-    "ip": "142.251.150.119",
+    "ip": "203.141.128.1",
     "port": 80,
-    "region": "SouthAmerica",
-    "id": "sa-east1-c"
+    "region": "Asia",
+    "id": "tokyo"
   }
 ]
