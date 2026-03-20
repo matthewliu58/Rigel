@@ -72,14 +72,10 @@ func DirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory 
 	default:
 	}
 
-	source_ := task.Source
-	file := task.File
-	dest := task.Dest
+	upload := task.Upload
 	start := chunk.Offset
 	length := chunk.Size
-
-	reader, err := GetTransferReader(ctx, source_, file, start, length,
-		task.LocalBaseDir, task.ObjectName, inMemory, pre, logger)
+	reader, err := GetTransferReader(ctx, upload, start, length, task.ObjectName, inMemory, pre, logger)
 	if err != nil {
 		finalErr = err
 		return finalErr
@@ -102,19 +98,19 @@ func DirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory 
 	default:
 	}
 
-	if dest.DestType == util.GCPCLoud {
-		if err := UploadToGCSbyClient(ctx, task.LocalBaseDir, dest.BucketName,
-			task.ObjectName, dest.CredFile, inMemory, reader, pre, logger); err != nil {
+	if upload.Dest.DataDestType == util.GCPCLoud {
+		if err := UploadToGCSbyClient(ctx, upload.Proxy.LocalDir, upload.Dest.DestGCP.BucketName,
+			task.ObjectName, upload.Dest.DestGCP.CredFile, inMemory, reader, pre, logger); err != nil {
 			logger.Error("UploadToGCSbyClient failed", slog.String("pre", pre), slog.String("index", task.Index), slog.Any("err", err))
 			finalErr = err
 			return finalErr
 		}
-	} else if dest.DestType == util.RemoteDisk {
+	} else if upload.Dest.DataDestType == util.RemoteDisk {
 		req := ChunkUploadRequest{
-			ServerURL:     dest.FileSys.Upload,
+			ServerURL:     upload.Dest.DestDisk.Upload,
 			FinalFileName: task.ObjectName,
 			ChunkName:     task.ObjectName,
-			LocalBaseDir:  task.LocalBaseDir,
+			LocalBaseDir:  upload.Proxy.LocalDir,
 		}
 		if _, err := UploadFileChunk(ctx, req, inMemory, reader, pre, logger); err != nil {
 			logger.Error("ChunkUploadHandler failed", slog.String("pre", pre), slog.String("index", task.Index), slog.Any("err", err))

@@ -18,60 +18,6 @@ const (
 	RoutingURL = "/api/v1/routing"
 )
 
-// TransferConfig 适配Form表单传输的文件传输配置结构体
-type TransferConfig struct {
-	Username string `json:"username" form:"username"` // 客户端用户名
-	Priority int    `json:"priority" form:"priority"` // 优先级
-
-	// ------------- 核心Form参数 -------------
-	FileName    string `json:"file_name" form:"file_name"`         // 源文件名（如test.zip）
-	FileStart   int64  `json:"file_start" form:"file_start"`       // 文件起始偏移（字节，默认0）
-	FileLength  int64  `json:"file_length" form:"file_length"`     // 文件传输长度（字节，0=整个文件）
-	NewFileName string `json:"new_file_name" form:"new_file_name"` // 目标文件名
-
-	DataSourceType string `json:"data_source_type" form:"data_source_type"` // 源类型
-	DataDestType   string `json:"data_dest_type" form:"data_dest_type"`     // 目标类型
-
-	// ------------- 源文件存储配置 -------------
-	Source struct {
-		// SSH配置（仅DataSourceType=remote_ssh时生效）
-		SSH struct {
-			User      string `json:"ssh_user" form:"ssh_user"`             // SSH用户名
-			Host      string `json:"ssh_host" form:"ssh_host"`             // SSH主机IP
-			SSHPort   string `json:"ssh_port" form:"ssh_port"`             // SSH端口
-			Password  string `json:"ssh_password" form:"ssh_password"`     // SSH密码
-			RemoteDir string `json:"ssh_remote_dir" form:"ssh_remote_dir"` // 远端文件目录
-		} `json:"ssh" form:"ssh"`
-
-		// GCP源配置（仅DataSourceType=gcp时生效）
-		CredFile   string `json:"gcp_source_cred_file" form:"gcp_source_cred_file"` // GCP凭证文件
-		BucketName string `json:"gcp_source_bucket" form:"gcp_source_bucket"`       // GCP存储桶
-	} `json:"source" form:"source"`
-
-	// ------------- 目标文件存储配置 -------------
-	Target struct {
-		// GCP目标配置（仅DataDestType=gcp时生效）
-		CredFile   string `json:"gcp_dest_cred_file" form:"gcp_dest_cred_file"` // GCP凭证文件
-		BucketName string `json:"gcp_dest_bucket" form:"gcp_dest_bucket"`       // GCP存储桶
-
-		// 文件系统接口配置（仅DataDestType=api时生效）
-		FileSys struct {
-			Upload string `json:"file_sys_upload" form:"file_sys_upload"` // 上传接口地址
-			Merge  string `json:"file_sys_merge" form:"file_sys_merge"`   // 合并接口地址
-		} `json:"file_sys" form:"file_sys"`
-	} `json:"target" form:"target"`
-
-	EndPoints util.EndPoints `json:"end_points" form:"end_points"`
-
-	// ------------- 传输通用配置 -------------
-	//Transfer struct {
-	//	ChunkSize   int64 `json:"chunk_size" form:"chunk_size"`     // 分块大小（字节，默认512MB）
-	//	Timeout     int64 `json:"timeout" form:"timeout"`           // 整体超时（秒，默认300）
-	//	RateLimit   int   `json:"rate_limit" form:"rate_limit"`     // 速率限制（Mbps，0=不限）
-	//	Concurrency int   `json:"concurrency" form:"concurrency"`   // 并发数（默认10）
-	//} `json:"transfer" form:"transfer"`
-}
-
 var (
 	LocalBaseDir string
 )
@@ -80,101 +26,26 @@ var (
 // ParseHeadersAndBuildUploadInfo 一站式处理请求头解析、校验、UploadInfo构造
 // 入参：Gin上下文、日志前缀、日志器
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
-func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (upload.UploadInfo, util.EndPoints, error) {
+func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (util.UploadConfig, error) {
 
 	fileName := c.GetHeader(util.HeaderFileName)
 	logger.Info("Start parsing headers and building upload info", slog.String("pre", pre),
 		slog.String("fileName", fileName))
 
-	var req TransferConfig
+	var req util.UploadConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
+		return util.UploadConfig{}, fmt.Errorf(errMsg)
+	}
+
+	if req.Source.DataSourceType == util.LocalDisk {
+		req.Proxy.LocalDir = LocalBaseDir
 	}
 
 	logger.Info("TransferConfig", slog.String("pre", pre), slog.Any("req", req))
-
-	// 1. 解析请求头
-	fileName = req.FileName
-	fileStart := req.FileStart
-	fileLength := req.FileLength
-	newFileName := req.NewFileName
-	sourceType := req.DataSourceType
-	destType := req.DataDestType
-
-	// 2.1 必传项校验
-	requiredChecks := map[string]string{
-		util.HeaderFileName: fileName,
-		util.DataSourceType: sourceType,
-		util.DataDestType:   destType,
-	}
-	for header, value := range requiredChecks {
-		if value == "" {
-			errMsg := fmt.Sprintf("Missing required header: %s", header)
-			logger.Error(errMsg, slog.String("pre", pre))
-			c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-			return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
-		}
-	}
-
-	// 2.3 源/目标类型合法性校验
-	validSourceTypes := map[string]bool{util.GCPCLoud: true, util.RemoteDisk: true, util.LocalDisk: true}
-	if !validSourceTypes[sourceType] {
-		errMsg := fmt.Sprintf("Invalid source type: %s (supported: %v)",
-			sourceType, []string{util.GCPCLoud, util.RemoteDisk, util.LocalDisk})
-		logger.Error(errMsg, slog.String("pre", pre))
-		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
-	}
-
-	validDestTypes := map[string]bool{util.GCPCLoud: true, util.RemoteDisk: true}
-	if !validDestTypes[destType] {
-		errMsg := fmt.Sprintf("Invalid dest type: %s (supported: %v)",
-			destType, []string{util.GCPCLoud, util.RemoteDisk})
-		logger.Error(errMsg, slog.String("pre", pre))
-		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadInfo{}, util.EndPoints{}, fmt.Errorf(errMsg)
-	}
-
-	//logger.Info("Header parse success", slog.String("pre", pre),
-	//	slog.String("fileName", fileName), slog.String("newFileName", newFileName),
-	//	slog.Int64("fileStart", fileStart), slog.Int64("fileLength", fileLength),
-	//	slog.String("sourceType", sourceType), slog.String("destType", destType))
-
-	// 3. 构造UploadInfo
-	uploadInfo := upload.UploadInfo{
-		File: upload.FileInfo{
-			Start:       fileStart,
-			Length:      fileLength,
-			FileName:    fileName,
-			NewFileName: newFileName,
-		},
-		Source: upload.SourceInfo{
-			SourceType: sourceType,
-			User:       req.Source.SSH.User,
-			HostPort:   req.Source.SSH.Host + ":" + req.Source.SSH.SSHPort,
-			//SSHPort:    "22",
-			Password:   req.Source.SSH.Password,
-			RemoteDir:  req.Source.SSH.RemoteDir,
-			BucketName: req.Source.BucketName,
-			CredFile:   req.Source.CredFile,
-		},
-		Dest: upload.DestInfo{
-			DestType: destType,
-			FileSys: util.FileSys{
-				Upload: req.Target.FileSys.Upload,
-				Merge:  req.Target.FileSys.Merge,
-			},
-			BucketName: req.Target.BucketName,
-			CredFile:   req.Target.CredFile,
-		},
-		LocalBaseDir: LocalBaseDir,
-	}
-
-	//logger.Info("UploadInfo built success", slog.String("pre", pre), slog.Any("uploadInfo", uploadInfo))
-	return uploadInfo, req.EndPoints, nil
+	return req, nil
 }
 
 // V2ClientUploadHandler V2版本客户端直传文件处理器
@@ -188,7 +59,7 @@ func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		// 1. 解析请求头信息，构建上传所需的基础信息（文件名、存储路径、客户端信息等）
 		// 返回值说明：uploadInfo-上传核心信息；_（忽略值）-扩展字段；err-解析错误
-		uploadInfo, _, err := ParseHeadersAndBuildUploadInfo(c, requestID, logger)
+		uploadInfo, err := ParseHeadersAndBuildUploadInfo(c, requestID, logger)
 		if err != nil {
 			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
@@ -224,13 +95,13 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("V1ProxyUploadHandler start", slog.String("pre", pre))
 
 		// 1. 解析请求头和请求体，构建上传基础信息
-		uploadInfo, endPoints, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
+		uploadInfo, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
 		if err != nil {
 			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
 
 		// 2. 调用B服务获取路由信息
-		routingInfo, err := getRoutingInfoFromServiceControlPlane(uploadInfo.File.FileName, endPoints, pre, logger)
+		routingInfo, err := getRoutingInfoFromServiceControlPlane(uploadInfo, pre, logger)
 		if err != nil {
 			handleError(c, logger, pre, http.StatusInternalServerError, "get routing info failed", err)
 			return
@@ -259,10 +130,10 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // getRoutingInfoFromServiceB 调用B服务获取路由信息
-func getRoutingInfoFromServiceControlPlane(filename string, endPoints util.EndPoints, pre string, logger *slog.Logger) (util.RoutingInfo, error) {
+func getRoutingInfoFromServiceControlPlane(uploadInfo util.UploadConfig, pre string, logger *slog.Logger) (util.RoutingInfo, error) {
 
 	// 构建调用B服务的请求
-	reqBodyBytes, _ := json.Marshal(endPoints)
+	reqBodyBytes, _ := json.Marshal(uploadInfo.EndPoints)
 	req, err := http.NewRequest("POST", config.Config_.ControlHost+RoutingURL, bytes.NewReader(reqBodyBytes))
 	if err != nil {
 		logger.Error("build service B request failed", slog.String("pre", pre), slog.String("err", err.Error()))
@@ -271,7 +142,7 @@ func getRoutingInfoFromServiceControlPlane(filename string, endPoints util.EndPo
 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(util.HeaderFileName, filename)
+	req.Header.Set(util.HeaderFileName, uploadInfo.File.NewFileName)
 
 	// 发送请求到B服务
 	client := &http.Client{Timeout: 10 * time.Second}

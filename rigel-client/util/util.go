@@ -14,65 +14,6 @@ import (
 	"time"
 )
 
-const (
-	GCPCLoud               = "gcp-cloud"
-	RemoteDisk             = "remote-disk"
-	LocalDisk              = "local-disk"
-	HeaderFileName         = "X-File-Name"  // 最终合并后的文件名
-	HeaderChunkName        = "X-Chunk-Name" // 单个分片的自定义名称
-	DataSourceType         = "X-Data-Source-Type"
-	DataDestType           = "X-Data-Dest-Type"
-	HeaderXHops            = "X-Hops"
-	HeaderXChunkIndex      = "X-Chunk-Index"
-	HeaderXRateLimitEnable = "X-Rate-Limit-Enable"
-	HeaderXSourceType      = "X-Source-Type"
-)
-
-type ApiResponse struct {
-	Code int         `json:"code"` // 200=成功，400=参数错误，500=服务端错误
-	Msg  string      `json:"msg"`  // 提示信息
-	Data interface{} `json:"data"` // 业务数据
-}
-
-type ChunkMergeRequest struct {
-	FinalFileName string   `json:"final_file_name" binding:"required"` // 最终合并后的文件名（必填）
-	ChunkNames    []string `json:"chunk_names" binding:"required"`     // 分片名列表（按顺序，必填）
-	DeleteChunks  bool     `json:"delete_chunks,omitempty"`            // 是否删除分片（可选，默认true）
-}
-
-type EndPoints struct {
-	ClientIP       string `json:"clientIP"` // 目标服务器 IP 或域名
-	ClientProvider string `json:"clientProvider"`
-	ClientRegion   string `json:"clientRegion"`   // 客户端大区
-	ClientID       string `json:"clientID"`       // 客户端城市
-	ServerIP       string `json:"serverIP"`       // 目标服务器 IP 或域名
-	ServerProvider string `json:"serverProvider"` // 云服务提供商，例如 AWS, GCP, DO ////ServerCont
-	ServerRegion   string `json:"serverRegion"`   // 云服务所在区域，例如 us-east-1
-	ServerID       string `json:"serverID"`       // 云服务所在城市，例如 Ashburn
-}
-
-type PathInfo struct {
-	Hops string `json:"hops"`
-	Rate int64  `json:"rate"`
-	//Weight int64  `json:"weight"`
-}
-
-type RoutingInfo struct {
-	Routing []PathInfo `json:"routing"`
-}
-
-// SSHConfig 定义SSH连接配置
-type SSHConfig struct {
-	User     string // 用户名
-	HostPort string // 主机IP:端口（如192.168.1.20:22）
-	Password string // 密码（或用密钥认证）
-}
-
-type FileSys struct {
-	Upload string // 上传接口地址 // ``
-	Merge  string // 合并接口地址
-}
-
 func GenerateRandomLetters(length int) string {
 	rand.Seed(time.Now().UnixNano())                                  // 使用当前时间戳作为随机数种子
 	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" // 字母范围（大小写）

@@ -199,7 +199,7 @@ func UploadFileChunkbyProxy(
 	default:
 	}
 
-	dest := task.Dest
+	upload := task.Upload
 	var proxyReader io.ReadCloser = reader
 
 	// 定义资源关闭defer（统一释放所有Reader）
@@ -213,7 +213,7 @@ func UploadFileChunkbyProxy(
 	// ---------------------- 2. 选择上传源：内存流 / 本地文件 ----------------------
 	if !inMemory {
 		// 模式1：inMemory=false → 从本地文件读取
-		localFilePath := filepath.Join(task.LocalBaseDir, task.ObjectName)
+		localFilePath := filepath.Join(upload.Proxy.LocalDir, task.ObjectName)
 		localFilePath = filepath.Clean(localFilePath) // 标准化路径（防多斜杠）
 
 		logger.Info("prepare to read local file",
@@ -255,7 +255,7 @@ func UploadFileChunkbyProxy(
 	}
 	firstHop := hopList[0]
 
-	url, _ := util.ReplaceUploadURLHost(dest.FileSys.Upload, firstHop)
+	url, _ := util.ReplaceUploadURLHost(upload.Dest.DestDisk.Upload, firstHop)
 	logger.Info("construct upload URL",
 		slog.String("pre", pre),
 		slog.String("url", url),
@@ -272,10 +272,10 @@ func UploadFileChunkbyProxy(
 
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("X-Hops", hops)
-	req.Header.Set("X-Chunk-Index", "1")
-	req.Header.Set("X-Rate-Limit-Enable", "true")
-	req.Header.Set("X-Source-Type", task.Source.SourceType)
+	req.Header.Set(util.HeaderXHops, hops)
+	req.Header.Set(util.HeaderXChunkIndex, "1")
+	req.Header.Set(util.HeaderXRateLimitEnable, "true")
+	req.Header.Set(util.HeaderDestTyep, upload.Dest.DataDestType)
 	req.Header.Set(util.HeaderFileName, task.ObjectName)
 	req.Header.Set(util.HeaderChunkName, task.ObjectName)
 	logger.Info("HTTP request headers set", slog.String("pre", pre))

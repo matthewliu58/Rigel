@@ -165,17 +165,6 @@ func UploadToGCSbyProxy(
 		slog.String("hops", hops),
 		slog.Bool("inMemory", inMemory))
 
-	// ---------------------- 1. 基础参数校验（防空指针） ----------------------
-	if task.Dest.BucketName == "" {
-		err := fmt.Errorf("dest bucket name is empty")
-		logger.Error("invalid dest config", slog.String("pre", pre), slog.Any("err", err))
-		return err
-	}
-	if task.Dest.CredFile == "" {
-		err := fmt.Errorf("dest cred file path is empty")
-		logger.Error("invalid dest config", slog.String("pre", pre), slog.Any("err", err))
-		return err
-	}
 	if len(hops) == 0 {
 		err := fmt.Errorf("hops is empty")
 		logger.Error("invalid hops", slog.String("pre", pre), slog.Any("err", err))
@@ -191,7 +180,7 @@ func UploadToGCSbyProxy(
 	default:
 	}
 
-	dest := task.Dest
+	upload := task.Upload
 	var proxyReader io.ReadCloser = reader
 
 	// 定义资源关闭defer（统一释放所有Reader）
@@ -205,7 +194,7 @@ func UploadToGCSbyProxy(
 	// ---------------------- 2. 选择上传源：内存流 / 本地文件 ----------------------
 	if !inMemory {
 		// 模式1：inMemory=false → 从本地文件读取
-		localFilePath := filepath.Join(task.LocalBaseDir, task.ObjectName)
+		localFilePath := filepath.Join(upload.Proxy.LocalDir, task.ObjectName)
 		localFilePath = filepath.Clean(localFilePath) // 标准化路径（防多斜杠）
 
 		logger.Info("prepare to read local file",
@@ -250,7 +239,7 @@ func UploadToGCSbyProxy(
 	url := fmt.Sprintf(
 		"http://%s/%s/%s",
 		firstHop,
-		dest.BucketName,
+		upload.Dest.DestGCP.BucketName,
 		task.ObjectName,
 	)
 	logger.Info("construct upload URL",
@@ -260,11 +249,11 @@ func UploadToGCSbyProxy(
 
 	// ---------------------- 5. 生成GCP Access Token ----------------------
 	logger.Info("start to generate GCP access token", slog.String("pre", pre))
-	jsonBytes, err := os.ReadFile(dest.CredFile)
+	jsonBytes, err := os.ReadFile(upload.Dest.DestGCP.CredFile)
 	if err != nil {
 		logger.Error("read cred file failed",
 			slog.String("pre", pre),
-			slog.String("credFile", dest.CredFile),
+			slog.String("credFile", upload.Dest.DestGCP.CredFile),
 			slog.Any("err", err))
 		return fmt.Errorf("read cred file: %w", err)
 	}
@@ -301,7 +290,7 @@ func UploadToGCSbyProxy(
 	req.Header.Set(util.HeaderXHops, hops)
 	req.Header.Set(util.HeaderXChunkIndex, "1")
 	req.Header.Set(util.HeaderXRateLimitEnable, "true")
-	req.Header.Set(util.HeaderXSourceType, task.Source.SourceType)
+	req.Header.Set(util.HeaderDestTyep, upload.Dest.DataDestType)
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
 	// 发送请求

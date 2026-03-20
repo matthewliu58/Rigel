@@ -22,13 +22,13 @@ import (
 )
 
 const (
-	HeaderHops       = "x-hops"
-	HeaderIndex      = "x-index"
-	HeaderSourceTyep = "X-Source-Type"
-	RemoteDisk       = "remote-disk"
-	DefaultIndex     = "1"
-	ServerErrorCode  = 503
-	BufferSize       = 64
+	HeaderHops      = "x-hops"
+	HeaderIndex     = "x-index"
+	HeaderDestTyep  = "X-Dest-Type"
+	RemoteDisk      = "remote-disk"
+	DefaultIndex    = "1"
+	ServerErrorCode = 503
+	BufferSize      = 64
 )
 
 // 自定义Handler：修复slog.Context为context.Context，兼容所有Go 1.21+版本
@@ -182,7 +182,7 @@ func handler(logger *slog.Logger) http.HandlerFunc {
 		method := r.Method
 		//最后一跳的逻辑
 		if newIndex == len(hops) {
-			sourceType := r.Header.Get(HeaderSourceTyep)
+			sourceType := r.Header.Get(HeaderDestTyep)
 			if sourceType != RemoteDisk {
 				scheme = "https"
 				method = "PUT"

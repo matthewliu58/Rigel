@@ -73,14 +73,10 @@ func RedirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemor
 	default:
 	}
 
-	source_ := task.Source
-	file := task.File
-	dest := task.Dest
+	upload := task.Upload
 	start := chunk.Offset
 	length := chunk.Size
-
-	reader, err := GetTransferReader(ctx, source_, file, start, length,
-		task.LocalBaseDir, task.ObjectName, inMemory, pre, logger)
+	reader, err := GetTransferReader(ctx, upload, start, length, task.ObjectName, inMemory, pre, logger)
 	if err != nil {
 		return err
 	}
@@ -102,12 +98,12 @@ func RedirectImp(task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemor
 	default:
 	}
 
-	if dest.DestType == util.GCPCLoud {
+	if upload.Dest.DataDestType == util.GCPCLoud {
 		if err := UploadToGCSbyProxy(task, hops, rateLimiter, reader, inMemory, pre, logger); err != nil {
 			logger.Error("UploadToGCSbyProxy failed", slog.String("pre", pre), slog.Any("err", err))
 			return err
 		}
-	} else if dest.DestType == util.RemoteDisk {
+	} else if upload.Dest.DataDestType == util.RemoteDisk {
 		if err := UploadFileChunkbyProxy(task, hops, rateLimiter, reader, inMemory, pre, logger); err != nil {
 			logger.Error("UploadFileChunkbyProxy failed", slog.String("pre", pre), slog.Any("err", err))
 			return err
