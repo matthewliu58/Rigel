@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"control-plane/etcd_client"
+	"control-plane/sync/etcd_client"
 	"control-plane/util"
 	"control-plane/vm_info"
 	"encoding/json"

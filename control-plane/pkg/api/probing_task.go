@@ -1,8 +1,8 @@
 package api
 
 import (
-	"control-plane/etcd_client"
 	"control-plane/storage"
+	"control-plane/sync/etcd_client"
 	"control-plane/util"
 	model "control-plane/vm_info"
 	"encoding/json"
