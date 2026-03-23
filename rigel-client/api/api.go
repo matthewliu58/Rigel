@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"rigel-client/config"
 	"rigel-client/upload"
-	"rigel-client/upload/upload"
+	up "rigel-client/upload/upload"
 	"rigel-client/util"
 	"time"
 )
@@ -27,16 +27,16 @@ var (
 // ParseHeadersAndBuildUploadInfo 一站式处理请求头解析、校验、UploadInfo构造
 // 入参：Gin上下文、日志前缀、日志器
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
-func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (upload.UploadStruct, error) {
+func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (up.UploadStruct, error) {
 
 	logger.Info("Start parsing upload info", slog.String("pre", pre))
 
-	var req upload.UploadStruct
+	var req up.UploadStruct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return upload.UploadStruct{}, fmt.Errorf(errMsg)
+		return up.UploadStruct{}, fmt.Errorf(errMsg)
 	}
 
 	if req.Source.Type == util.LocalDisk {
@@ -132,7 +132,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // getRoutingInfoFromServiceB 调用B服务获取路由信息
-func getRoutingInfoFromServiceControlPlane(uploadInfo upload.UploadStruct, pre string, logger *slog.Logger) (upload.RoutingInfo, error) {
+func getRoutingInfoFromServiceControlPlane(uploadInfo up.UploadStruct, pre string, logger *slog.Logger) (upload.RoutingInfo, error) {
 
 	// 构建调用B服务的请求
 	reqBodyBytes, _ := json.Marshal(uploadInfo.EndPoints)
