@@ -1,4 +1,4 @@
-package upload
+package base
 
 import (
 	"context"
@@ -52,7 +52,7 @@ type UploadStruct struct {
 	Proxy     Proxy     `json:"proxy" form:"proxy"`
 	Source    End       `json:"source" form:"source"`
 	Dest      End       `json:"dest" form:"dest"`
-	EndPoints EndPoints `json:"end_points"`
+	EndPoints EndPoints `json:"end_points" form:"end_points"`
 }
 
 type GetFileSizeInterface interface {

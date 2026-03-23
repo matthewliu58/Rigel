@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"golang.org/x/time/rate"
 	"log/slog"
+	"rigel-client/upload/base"
 	"rigel-client/upload/split"
-	"rigel-client/upload/upload"
 	"time"
 )
 
 func DirectImp(
-	fo upload.FileOperateInterfaces,
+	fo base.FileOperateInterfaces,
 	task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 	logger.Info("UploadDirectImp", slog.String("pre", pre), slog.String("index", task.Index)) // 优化：只打印index，避免task序列化过大
 

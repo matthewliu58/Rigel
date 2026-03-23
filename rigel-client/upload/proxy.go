@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"golang.org/x/time/rate"
 	"log/slog"
+	"rigel-client/upload/base"
 	"rigel-client/upload/split"
-	"rigel-client/upload/upload"
 	"time"
 )
 
 func RedirectImp(
-	fo upload.FileOperateInterfaces,
+	fo base.FileOperateInterfaces,
 	task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 
 	logger.Info("UploadRedirectImp", slog.String("pre", pre), slog.Any("task", task))

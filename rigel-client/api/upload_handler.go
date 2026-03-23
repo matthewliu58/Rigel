@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"rigel-client/config"
 	"rigel-client/upload"
-	up "rigel-client/upload/upload"
+	"rigel-client/upload/base"
 	"rigel-client/util"
 	"time"
 )
@@ -27,16 +27,16 @@ var (
 // ParseHeadersAndBuildUploadInfo 一站式处理请求头解析、校验、UploadInfo构造
 // 入参：Gin上下文、日志前缀、日志器
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
-func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (up.UploadStruct, error) {
+func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (base.UploadStruct, error) {
 
 	logger.Info("Start parsing upload info", slog.String("pre", pre))
 
-	var req up.UploadStruct
+	var req base.UploadStruct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return up.UploadStruct{}, fmt.Errorf(errMsg)
+		return base.UploadStruct{}, fmt.Errorf(errMsg)
 	}
 
 	if req.Source.Type == util.LocalDisk {
@@ -50,7 +50,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 // V2ClientUploadHandler V2版本客户端直传文件处理器
 // 核心流程：解析上传请求头 -> 直接调用客户端直传逻辑上传文件 -> 返回上传结果
 // 区别于V1代理上传：无需调用B服务获取路由，直接完成文件上传
-func V2ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
+func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成5位随机字符串作为请求唯一标识，用于日志追踪
 		requestID := util.GenerateRandomLetters(5)
@@ -132,7 +132,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 }
 
 // getRoutingInfoFromServiceB 调用B服务获取路由信息
-func getRoutingInfoFromServiceControlPlane(uploadInfo up.UploadStruct, pre string, logger *slog.Logger) (upload.RoutingInfo, error) {
+func getRoutingInfoFromServiceControlPlane(uploadInfo base.UploadStruct, pre string, logger *slog.Logger) (upload.RoutingInfo, error) {
 
 	// 构建调用B服务的请求
 	reqBodyBytes, _ := json.Marshal(uploadInfo.EndPoints)

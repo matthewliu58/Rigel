@@ -110,13 +110,15 @@ func main() {
 	router.Use(AccessLogMiddleware(logger))
 	router.Use(gin.Recovery())
 
-	//api.InitProxyUserRoutingRouter(router, RoutingURL, logger)
+	//proxy
 	router.POST("/api/v1/proxy/upload", api.V1ProxyUploadHandler(logger))
+	router.POST("/api/v1/proxy/large/upload", api.V1ProxyLargeUploadHandler(logger))
 
-	// 上传接口
-	router.POST("/api/v2/client/upload", api.V2ClientUploadHandler(logger))
+	//client
+	router.POST("/api/v1/client/upload", api.V1ClientUploadHandler(logger))
+	router.POST("/api/v1/client/large/upload", api.V1ClientLargeUploadHandler(logger))
 
-	// ========== 新增文件接收上传接口 ==========
+	//chunk
 	router.POST("/api/v1/chunk/upload", api.ChunkUploadHandler(logger)) // 分片上传（自定义名）
 	router.POST("/api/v1/chunk/merge", api.ChunkMergeHandler(logger))   // 分片合并（指定顺序）
 
