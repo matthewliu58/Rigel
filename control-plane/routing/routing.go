@@ -42,7 +42,7 @@ func (g *GraphManager) Routing(endPoints EndPoints, pre string, logger *slog.Log
 	var startNodes []*storage.NetworkTelemetry
 
 	for _, node := range allNodes {
-		//proxy部署client逻辑
+		//proxy部署client逻辑, 优先走自己
 		if node.PublicIP == endPoints.Source.IP {
 			startNodes = append(startNodes, node)
 			break

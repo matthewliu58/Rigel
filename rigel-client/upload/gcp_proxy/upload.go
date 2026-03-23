@@ -121,6 +121,8 @@ func (u *Upload) UploadFile(
 		logger.Error("parse hops failed", slog.String("pre", pre), slog.Any("err", err))
 		return err
 	}
+
+	//todo 如果first为本机ip 直接改成127.0.0.1不走public
 	firstHop := hopList[0]
 
 	url := fmt.Sprintf(

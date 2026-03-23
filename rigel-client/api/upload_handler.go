@@ -31,6 +31,8 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 
 	logger.Info("Start parsing upload info", slog.String("pre", pre))
 
+	//todo file size 可以通过 header传入 省的计算
+
 	var req base.UploadStruct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
