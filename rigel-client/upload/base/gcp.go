@@ -1,6 +1,9 @@
 package base
 
-import "log/slog"
+import (
+	"encoding/json"
+	"log/slog"
+)
 
 type GCP struct {
 	CredFile   string `json:"cred_file" form:"cred_file"`     // GCP凭证文件
@@ -8,12 +11,19 @@ type GCP struct {
 }
 
 func ExtractGCPFromInterface(obj interface{}, pre string, logger *slog.Logger) *GCP {
-	// 类型断言：把 interface{} 转为 *GCP
-	gcpObj, ok := obj.(*GCP)
-	if !ok {
-		// 断言失败（类型不匹配），返回 nil 或抛错（按需选择）
-		logger.Error("interface 不是 GCP 类型", slog.Any("pre", pre))
+	// 1. 先把 obj 转成 JSON 字节
+	data, err := json.Marshal(obj)
+	if err != nil {
+		logger.Error("marshal interface failed", slog.Any("pre", pre), slog.Any("err", err))
 		return nil
 	}
-	return gcpObj
+
+	// 2. 再反序列化到 GCP
+	var gcp GCP
+	if err := json.Unmarshal(data, &gcp); err != nil {
+		logger.Error("unmarshal to GCP failed", slog.Any("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	return &gcp
 }
