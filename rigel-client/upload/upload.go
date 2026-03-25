@@ -406,7 +406,7 @@ func ChunkEventLoop(ctx context.Context, fo base.FileOperateInterfaces, upload b
 
 			case ChunkFinished:
 				logger.Info("ChunkFinished", slog.String("pre", pre),
-					slog.String("fileName", upload.File.NewFileName))
+					slog.String("fileName", upload.File.NewFileName), slog.Time("time", time.Now()))
 
 				var parts []string
 				chunks_ := chunks.GetAll()
@@ -538,7 +538,7 @@ func UploadFunc_(
 
 // Upload 核心入口：保留pre入参，上下文透传 + 统一取消所有goroutine
 func UploadFunc(
-	cleintB bool,
+	clientB bool,
 	us base.UploadStruct,
 	handler func(base.FileOperateInterfaces, ChunkTask, string, *rate.Limiter, bool, string, *slog.Logger) error,
 	routing RoutingInfo,
@@ -546,7 +546,7 @@ func UploadFunc(
 	pre string, // 保留原有pre入参
 	logger *slog.Logger) error {
 
-	logger.Info("UploadFunc", slog.String("pre", pre), slog.Any("us", us))
+	logger.Info("UploadFunc", slog.String("pre", pre), slog.Any("us", us), slog.Time("time", time.Now()))
 
 	// 核心修复1：创建带全局超时的可取消上下文（管控所有goroutine）
 	ctx, cancel := context.WithTimeout(context.Background(), UploadTimeout)
@@ -556,7 +556,7 @@ func UploadFunc(
 	}()
 
 	// 1. 初始化接口
-	fo := base.InitInterface(cleintB, us, pre, logger)
+	fo := base.InitInterface(clientB, us, pre, logger)
 
 	// 3. 获取文件真实长度
 	var fileSize int64
@@ -570,7 +570,8 @@ func UploadFunc(
 		logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("%w: %s", ErrFileSizeFailed, err.Error())
 	}
-	logger.Info("Get file size success", slog.String("pre", pre), slog.Int64("size", fileSize))
+	logger.Info("Get file size success", slog.String("pre", pre),
+		slog.Int64("size", fileSize), slog.Time("time", time.Now()))
 
 	// 4. 文件分块
 	chunks := util.NewSafeMap()
@@ -579,6 +580,9 @@ func UploadFunc(
 	if err != nil {
 		logger.Error("Split file failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("%w: %s", ErrChunkSplitFailed, err.Error())
+	} else {
+		logger.Info("Split file success", slog.String("pre", pre),
+			slog.Int64("size", fileSize), slog.Time("time", time.Now()))
 	}
 
 	//inMemory := false
@@ -607,7 +611,8 @@ func UploadFunc(
 	newFileName := us.File.NewFileName
 	select {
 	case <-done:
-		logger.Info("Function finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
+		logger.Info("Function finished", slog.String("pre", pre),
+			slog.String("newFileName", newFileName), slog.Time("time", time.Now()))
 	case <-ctx.Done():
 		// 超时/取消触发
 		err := ctx.Err()
@@ -619,7 +624,8 @@ func UploadFunc(
 		return fmt.Errorf("upload canceled: %w", err)
 	}
 
-	logger.Info("Main program finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
+	logger.Info("UploadFunc finished", slog.String("pre", pre),
+		slog.String("newFileName", newFileName), slog.Time("time", time.Now()))
 	return nil
 }
 

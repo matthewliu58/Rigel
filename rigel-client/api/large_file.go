@@ -34,11 +34,13 @@ func V1ProxyLargeUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一标识，用于日志追踪
 		pre := util.GenerateRandomLetters(5)
-		logger.Info("V1ProxyLargeUploadHandler start", slog.String("pre", pre))
+		logger.Info("V1ProxyLargeUploadHandler start",
+			slog.String("pre", pre), slog.Time("time", time.Now()))
 
 		processUploadLogic(c, false, pre, logger)
 
-		logger.Info("V1ProxyLargeUploadHandler end", slog.String("pre", pre))
+		logger.Info("V1ProxyLargeUploadHandler end",
+			slog.String("pre", pre), slog.Time("time", time.Now()))
 	}
 }
 
@@ -46,21 +48,27 @@ func V1ClientLargeUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一标识，用于日志追踪
 		pre := util.GenerateRandomLetters(5)
-		logger.Info("V1ClientLargeUploadHandler start", slog.String("pre", pre))
+		logger.Info("V1ClientLargeUploadHandler start",
+			slog.String("pre", pre), slog.Time("time", time.Now()))
 
 		processUploadLogic(c, true, pre, logger)
 
-		logger.Info("V1ClientLargeUploadHandler end", slog.String("pre", pre))
+		logger.Info("V1ClientLargeUploadHandler end",
+			slog.String("pre", pre), slog.Time("time", time.Now()))
 	}
 }
 
-func processUploadLogic(c *gin.Context, cleintB bool, pre string, logger *slog.Logger) {
+func processUploadLogic(c *gin.Context, clientB bool, pre string, logger *slog.Logger) {
+
+	logger.Info("Start processing upload logic", slog.String("pre", pre),
+		slog.Any("client", clientB), slog.Time("time", time.Now()))
+
 	// 1. 解析请求头和请求体，构建上传基础信息
 	largeFile, err := ParseHeadersAndBuildUploadInfo_(c, pre, logger)
 	if err != nil {
 		return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 	}
-	fo := upload.UploadFunc_(cleintB, largeFile.Upload, pre, logger)
+	fo := upload.UploadFunc_(clientB, largeFile.Upload, pre, logger)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer func() {
@@ -79,12 +87,20 @@ func processUploadLogic(c *gin.Context, cleintB bool, pre string, logger *slog.L
 	if err != nil {
 		handleError(c, logger, pre, http.StatusInternalServerError, "GetFileSize failed", err)
 		return
+	} else {
+		logger.Info("GetFileSize success", slog.String("pre", pre),
+			slog.Int64("size", l), slog.Time("time", time.Now()))
 	}
-	list, err := ProcessLargeFileUpload(cleintB, largeFile, l, pre, logger)
+
+	list, err := ProcessLargeFileUpload(clientB, largeFile, l, pre, logger)
 	if err != nil {
 		handleError(c, logger, pre, http.StatusInternalServerError, "ProcessLargeFileUpload failed", err)
 		return
+	} else {
+		logger.Info("ProcessLargeFileUpload success", slog.String("pre", pre),
+			slog.Any("list", list), slog.Time("time", time.Now()))
 	}
+
 	if len(list) > 1 {
 		list = util.SortPartStrings(list)
 		if fo.ComposeFile.ComposeFile == nil {
@@ -99,6 +115,7 @@ func processUploadLogic(c *gin.Context, cleintB bool, pre string, logger *slog.L
 			return
 		}
 	}
+	logger.Info("processUploadLogic finished", slog.String("pre", pre), slog.Time("time", time.Now()))
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": list})
 }
 
@@ -127,6 +144,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 	logger.Info("开始处理大文件分片上传",
 		slog.String("pre", pre),
 		slog.String("func", "ProcessLargeFileUpload"),
+		slog.Time("time", time.Now()),
 	)
 
 	if len(largeFile.VMs) == 0 {
@@ -146,6 +164,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 			slog.String("pre", pre),
 			slog.String("func", "ProcessLargeFileUpload"),
 			slog.Int64("file_length", file.FileLength),
+			slog.Time("time", time.Now()),
 		)
 	}
 
@@ -200,6 +219,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 			slog.String("func", "ProcessLargeFileUpload"),
 			slog.String("vm_ip", vm.IP),
 			slog.String("new_file_name", splitFileName),
+			slog.Time("time", time.Now()),
 		)
 
 		offset += allocatedLength
@@ -216,6 +236,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 		slog.String("func", "ProcessLargeFileUpload"),
 		slog.Int("task_count", len(vmTasks)),
 		slog.Duration("timeout", LargeFileUploadTimeout),
+		slog.Time("time", time.Now()),
 	)
 
 	for ip, task := range vmTasks {
@@ -244,6 +265,8 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 				)
 				return
 			}
+
+			logger.Info("上传请求准备发送", slog.String("pre", pre), slog.Time("time", time.Now()))
 
 			// 发送POST请求
 			resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
@@ -298,6 +321,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 				slog.String("pre", pre),
 				slog.String("func", "ProcessLargeFileUpload"),
 				slog.String("vm_ip", ip),
+				slog.Time("time", time.Now()),
 			)
 		}(ip, task)
 	}
@@ -320,6 +344,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 			slog.String("func", "ProcessLargeFileUpload"),
 			slog.Duration("timeout", LargeFileUploadTimeout),
 			slog.String("error", finalErr.Error()),
+			slog.Time("time", time.Now()),
 		)
 		return nil, finalErr
 	}
@@ -329,6 +354,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 			slog.String("pre", pre),
 			slog.String("func", "ProcessLargeFileUpload"),
 			slog.Any("split_file_names", splitFileNames),
+			slog.Time("time", time.Now()),
 		)
 		return splitFileNames, nil
 	}
@@ -338,6 +364,7 @@ func ProcessLargeFileUpload(cleintB bool, largeFile LargeFile, size int64, pre s
 		slog.String("func", "ProcessLargeFileUpload"),
 		slog.String("error", finalErr.Error()),
 		slog.Any("split_file_names", splitFileNames),
+		slog.Time("time", time.Now()),
 	)
 	return nil, finalErr
 }
