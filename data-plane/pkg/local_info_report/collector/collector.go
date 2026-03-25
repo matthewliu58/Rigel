@@ -57,7 +57,7 @@ func (c *VMCollector) Collect(pre string, logger *slog.Logger) (*model.VMReport,
 
 	cong, err := GetCongestionInfo()
 	if err != nil {
-		logger.Error("获取congestion信息失败：%v\n", err)
+		logger.Warn("获取congestion信息失败：%v\n", err)
 	}
 
 	val := &model.VMReport{

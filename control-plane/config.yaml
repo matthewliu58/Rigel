@@ -23,8 +23,8 @@ scaling:
 
 node:
   provider: "vultr"        # gcp | aws | azure | vultr | digitalocean | onprem
-  continent: "Asia"      # ONLY field used for bandwidth / cost query
-  country: "Asia"          # 可选，用于日志/解释/未来扩展
+  continent: "asia"      # ONLY field used for bandwidth / cost query
+  country: "japan"          # 可选，用于日志/解释/未来扩展
   city: "tokyo"          # 可选，用于日志/解释/未来扩展
   ip:
     private: "0.0.0.0"  # 内网 IP

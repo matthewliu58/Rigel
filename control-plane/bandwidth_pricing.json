@@ -3,13 +3,13 @@
   "dimension": "continent_to_continent",
 
   "continents": [
-    "NorthAmerica",
-    "Europe",
-    "Asia",
-    "Oceania",
-    "SouthAmerica",
-    "Africa",
-    "MiddleEast"
+    "northAmerica",
+    "europe",
+    "asia",
+    "oceania",
+    "southAmerica",
+    "africa",
+    "middleEast"
   ],
 
   "providers": {

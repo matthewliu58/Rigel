@@ -173,7 +173,7 @@ func (o *EnvoyOperator) InitEnvoyGlobalConfig(uu *util.Config, adminPort int,
 	}
 
 	b, _ := json.Marshal(o.GlobalCfg)
-	logger.Info("初始化Envoy全局配置", slog.String("pre", pre), "config", string(b))
+	logger.Info("初始化Envoy全局配置", slog.String("pre", pre), slog.String("config", string(b)))
 
 	return nil
 }
@@ -273,11 +273,11 @@ func (o *EnvoyOperator) UpdateGlobalTargetAddrs(targetAddrs []EnvoyTargetAddr,
 		return errors.New("target addrs cannot be empty")
 	}
 
-	logger.Info("UpdateGlobalTargetAddrs", slog.String("pre", pre), "targetAddrs", targetAddrs)
+	logger.Info("UpdateGlobalTargetAddrs", slog.String("pre", pre), slog.Any("targetAddrs", targetAddrs))
 
 	b, _ := json.Marshal(o.GlobalCfg)
 	logger.Info("UpdateGlobalTargetAddrs, old config",
-		slog.String("pre", pre), "config", string(b))
+		slog.String("pre", pre), slog.String("config", string(b)))
 
 	// 更新后端地址
 	//o.GlobalCfg.TargetAddrs = append(o.GlobalCfg.TargetAddrs, targetAddrs...)
@@ -309,7 +309,7 @@ func (o *EnvoyOperator) UpdateGlobalTargetAddrs(targetAddrs []EnvoyTargetAddr,
 
 	b, _ = json.Marshal(o.GlobalCfg)
 	logger.Info("UpdateGlobalTargetAddrs, new config",
-		slog.String("pre", pre), "config", string(b))
+		slog.String("pre", pre), slog.String("config", string(b)))
 
 	// 渲染配置
 	if err := RenderEnvoyYamlConfig(o.GlobalCfg, o.ConfigPath); err != nil {

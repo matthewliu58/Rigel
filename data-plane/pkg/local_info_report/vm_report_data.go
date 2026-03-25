@@ -1,7 +1,7 @@
 package local_info_report
 
 import (
-	"data-plane/util"
+	"data-plane/probing"
 	"time"
 )
 
@@ -117,10 +117,10 @@ type ProxyStatus struct {
 }
 
 type LinkCongestionInfo struct {
-	TargetIP       string         `json:"target_ip"` // 目标节点 IP
-	Target         util.ProbeTask `json:"target"`
-	PacketLoss     float64        `json:"packet_loss"`     // 丢包率，百分比
-	WeightedCache  float64        `json:"weighted_cache"`  // 链路缓存情况（可选）
-	AverageLatency float64        `json:"average_latency"` // 平均延迟（毫秒）
-	BandwidthUsage float64        `json:"bandwidth_usage"` // 带宽利用率（可选百分比）
+	TargetIP       string            `json:"target_ip"` // 目标节点 IP
+	Target         probing.ProbeTask `json:"target"`
+	PacketLoss     float64           `json:"packet_loss"`     // 丢包率，百分比
+	WeightedCache  float64           `json:"weighted_cache"`  // 链路缓存情况（可选）
+	AverageLatency float64           `json:"average_latency"` // 平均延迟（毫秒）
+	BandwidthUsage float64           `json:"bandwidth_usage"` // 带宽利用率（可选百分比）
 }

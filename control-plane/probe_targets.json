@@ -3,7 +3,7 @@
     "provider": "gcp",
     "ip": "203.141.128.1",
     "port": 80,
-    "region": "Asia",
+    "region": "asia",
     "id": "tokyo"
   }
 ]

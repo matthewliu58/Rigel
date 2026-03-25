@@ -157,14 +157,6 @@ func main() {
 	slog.SetDefault(logger)
 	slog.SetDefault(logger1)
 
-	// 初始化日志，输出到 log/app.log
-	//logger := slog.New(slog.NewTextHandler(logFile, &slog.HandlerOptions{
-	//	Level: slog.LevelInfo,
-	//}))
-	//logger1 := slog.New(slog.NewTextHandler(logFile1, &slog.HandlerOptions{
-	//	Level: slog.LevelInfo,
-	//}))
-
 	// 初始化标记
 	logPre := "init"
 
