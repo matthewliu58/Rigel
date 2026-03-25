@@ -194,113 +194,6 @@ func CollectExpiredChunks(
 }
 
 // NewWorkerPool 保留pre入参，上下文透传 + 新增取消逻辑
-//func NewWorkerPool(
-//	fo base.FileOperateInterfaces,
-//	queueSize int,
-//	routingInfo RoutingInfo,
-//	handler func(base.FileOperateInterfaces, ChunkTask, string, *rate.Limiter, bool, string, *slog.Logger) error,
-//	inMemory bool,
-//	pre string, // 保留pre入参
-//	logger *slog.Logger,
-//) *WorkerPool {
-//	taskCh := make(chan ChunkTask, queueSize)
-//	// 新增：创建取消上下文，用于终止协程池
-//	ctx, cancel := context.WithCancel(context.Background())
-//
-//	p := &WorkerPool{
-//		TaskCh: taskCh,
-//		cancel: cancel, // 保存取消函数
-//	}
-//	logger.Info("NewWorkerPool", slog.String("pre", pre), "queueSize", queueSize)
-//
-//	workerNum := len(routingInfo.Routing)
-//	if workerNum <= 0 {
-//		for i := 0; i < MaxConcurrency; i++ {
-//			go func(workerID int) {
-//				logger.Info("Worker for direct init", slog.String("pre", pre), "worker", workerID)
-//
-//				for {
-//					select {
-//					case <-ctx.Done(): // 监听取消信号
-//						logger.Info("Worker exit: context canceled", slog.String("pre", pre), "worker", workerID)
-//						return
-//					case task, ok := <-taskCh: // 监听任务通道（关闭时ok=false）
-//						if !ok {
-//							logger.Info("Worker exit: task channel closed", slog.String("pre", pre), "worker", workerID)
-//							return
-//						}
-//
-//						err := handler(
-//							fo,
-//							task,
-//							"",
-//							nil,
-//							inMemory,
-//							pre, // 传递pre入参
-//							logger,
-//						)
-//
-//						if err != nil {
-//							logger.Error("handle task", slog.String("pre", pre), "worker", workerID, "err", err)
-//						} else {
-//							logger.Info("handle task", slog.String("pre", pre), "worker", workerID, "task", task.Index)
-//						}
-//					}
-//				}
-//			}(i)
-//		}
-//	} else {
-//
-//		for i := 0; i < MaxConcurrency; i++ {
-//
-//			rand.Seed(time.Now().UnixNano())
-//			index := rand.Intn(workerNum)
-//
-//			go func(workerID int, pathInfo PathInfo) {
-//				rate_ := pathInfo.Rate
-//				bytesPerSec := rate_ * 1024 * 1024 / 8 // Mbps → bytes/sec
-//				limiter := rate.NewLimiter(rate.Limit(bytesPerSec), int(bytesPerSec))
-//
-//				logger.Info("Worker for redirect init", slog.String("pre", pre),
-//					"worker", workerID, "rate", rate_, "hops", pathInfo.Hops)
-//
-//				for {
-//					select {
-//					case <-ctx.Done(): // 监听取消信号
-//						logger.Info("Worker exit: context canceled", slog.String("pre", pre), "worker", workerID)
-//						return
-//					case task, ok := <-taskCh: // 监听任务通道
-//						if !ok {
-//							logger.Info("Worker exit: task channel closed", slog.String("pre", pre), "worker", workerID)
-//							return
-//						}
-//
-//						// 上下文附加pre
-//						err := handler(
-//							fo,
-//							task,
-//							pathInfo.Hops,
-//							limiter,
-//							inMemory,
-//							pre, // 传递pre入参
-//							logger,
-//						)
-//
-//						if err != nil {
-//							logger.Error("handle task", slog.String("pre", pre), "worker", workerID, "err", err)
-//						} else {
-//							logger.Info("handle task", slog.String("pre", pre), "worker", workerID, "task", task.Index)
-//						}
-//					}
-//				}
-//			}(i, routingInfo.Routing[index])
-//
-//		}
-//	}
-//	return p
-//}
-
-// NewWorkerPool 保留pre入参，上下文透传 + 新增取消逻辑
 func NewWorkerPool(
 	fo base.FileOperateInterfaces,
 	queueSize int,
@@ -442,7 +335,9 @@ func ChunkEventLoop(ctx context.Context, fo base.FileOperateInterfaces, upload b
 				}
 				close(done)
 
-				_ = util.DeleteFilesInDir(upload.Proxy.LocalDir, parts, pre, logger)
+				if !inMemory {
+					_ = util.DeleteFilesInDir(upload.Proxy.LocalDir, parts, pre, logger)
+				}
 
 				return
 			}

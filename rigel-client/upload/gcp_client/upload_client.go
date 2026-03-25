@@ -44,7 +44,7 @@ func (u *Upload) UploadFile(
 	logger *slog.Logger,
 ) error {
 
-	logger.Info("UploadToGCSbyClient", slog.String("pre", pre))
+	logger.Info("UploadToGCSbyClient", slog.String("pre", pre), slog.String("objectName", objectName))
 	// 仅在「上传开始前」检查ctx是否已取消（避免启动无效上传）
 	select {
 	case <-ctx.Done():

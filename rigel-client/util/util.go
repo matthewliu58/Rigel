@@ -29,54 +29,41 @@ func GenerateRandomLetters(length int) string {
 // 返回：最优分片大小（字节，如 1048576 对应1M，67108864对应64M）
 func AutoSelectChunkSize(totalSize int64) int64 {
 	const (
-		// 基础单位常量（字节）
-		_1M   = 1 * 1024 * 1024
-		_64M  = 64 * 1024 * 1024
-		_512M = 512 * 1024 * 1024
-		_1G   = 1 * 1024 * 1024 * 1024
-		_2G   = 2 * 1024 * 1024 * 1024
-
-		// 阈值常量
-		_100MB = 100 * 1024 * 1024
-		_1GB   = 1 * 1024 * 1024 * 1024
-		_10GB  = 10 * 1024 * 1024 * 1024
-		_100GB = 100 * 1024 * 1024 * 1024
+		_64M  = 64 << 20  // 64MB
+		_256M = 256 << 20 // 256MB
+		_512M = 512 << 20 // 512MB
+		_1G   = 1 << 30   // 1GB
 	)
 
 	switch {
-	case totalSize <= _100MB:
-		return _1M // 1*1024*1024
-	case totalSize <= _1GB:
-		return _64M // 64*1024*1024
-	case totalSize <= _10GB:
-		return _512M // 512*1024*1024
-	case totalSize <= _100GB:
-		return _1G // 1*1024*1024*1024
-	default:
-		return _2G // 2*1024*1024*1024
+	case totalSize < 1<<30: // < 1GB
+		return _64M
+	case totalSize < 5<<30: // < 5GB
+		return _256M
+	case totalSize < 20<<30: // < 20GB → 直接用 512MB！
+		return _512M
+	default: // >= 20GB → 1GB
+		return _1G
 	}
 }
 
 // autoSelectBs 根据读取的总大小自动选择最优块大小
 func AutoSelectBs(totalSize int64) string {
 	const (
-		_100MB = 100 * 1024 * 1024
-		_1GB   = 1024 * 1024 * 1024
-		_10GB  = 10 * _1GB
-		_100GB = 100 * _1GB
+		_1GB  = 1 << 30  // 1GB
+		_5GB  = 5 << 30  // 5GB
+		_20GB = 20 << 30 // 20GB
 	)
 
 	switch {
-	case totalSize <= _100MB:
-		return "1M"
-	case totalSize <= _1GB:
+	case totalSize < _1GB:
 		return "64M"
-	case totalSize <= _10GB:
+	case totalSize < _5GB:
+		return "256M"
+	case totalSize < _20GB:
 		return "512M"
-	case totalSize <= _100GB:
-		return "1G"
 	default:
-		return "2G"
+		return "1G"
 	}
 }
 
