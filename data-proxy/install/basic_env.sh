@@ -52,11 +52,28 @@ export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 
-echo "==> Reload bashrc"
-# source $BASHRC 已经通过上面的 export 立即生效，不用再重复 source
+# ========== Rust 环境 ==========
+echo -e "\n==> Install Rust (Stable)"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-echo "==> Verify installation"
-git --version
-go version
+# 让 Rust 立即生效（不重启终端也能用）
+source $HOME/.cargo/env
 
-echo "==> Done"
+# 写入环境变量到 bashrc（永久生效）
+if ! grep -q ".cargo/env" "$BASHRC"; then
+cat << EOF >> "$BASHRC"
+
+# Rust environment
+source \$HOME/.cargo/env
+EOF
+fi
+
+echo "==> Verify Rust installation"
+rustc --version
+cargo --version
+rustup --version
+
+# ===== 结束 =====
+echo -e "\n==> All installation done!"
+echo "Go  and Rust are ready!"
+echo "You can now run: cargo build  or  cargo build --release"
