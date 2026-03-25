@@ -118,9 +118,9 @@ func (c *Compose) ComposeFile(
 	// 2. 多文件场景：原有树形合成逻辑（保留）
 	os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
 	// 创建GCS客户端
-	ctx_, cancel := context.WithTimeout(ctx, 1*time.Minute)
-	defer cancel()
-	client, err := storage.NewClient(ctx_)
+	//ctx_, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	//defer cancel()
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		logger.Error("create GCS client failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("new storage client failed: %w", err)
@@ -151,7 +151,7 @@ func (c *Compose) ComposeFile(
 			}
 
 			// 执行合成操作
-			if _, err := bkt.Object(tmpObjectName).ComposerFrom(objs...).Run(ctx_); err != nil {
+			if _, err := bkt.Object(tmpObjectName).ComposerFrom(objs...).Run(ctx); err != nil {
 				logger.Error("compose temp object failed",
 					slog.String("pre", pre),
 					slog.String("tmpObjectName", tmpObjectName),
@@ -175,7 +175,7 @@ func (c *Compose) ComposeFile(
 	}
 
 	// 3. 多文件合成最终步骤：临时文件→最终文件
-	if err := finalizeObject(ctx_, bkt, current[0], objectName); err != nil {
+	if err := finalizeObject(ctx, bkt, current[0], objectName); err != nil {
 		logger.Error("finalize object failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("finalize object failed: %w", err)
 	}
@@ -184,7 +184,7 @@ func (c *Compose) ComposeFile(
 	// 4.1 删除中间临时文件（排除已在finalizeObject删除的最终临时文件）
 	for _, tmp := range tempObjects {
 		if tmp != current[0] {
-			if delErr := bkt.Object(tmp).Delete(ctx_); delErr != nil {
+			if delErr := bkt.Object(tmp).Delete(ctx); delErr != nil {
 				logger.Warn("delete temp object failed",
 					slog.String("pre", pre),
 					slog.String("tmp", tmp),
@@ -195,7 +195,7 @@ func (c *Compose) ComposeFile(
 
 	// 4.2 删除原始分片文件
 	for _, p := range parts {
-		if delErr := bkt.Object(p).Delete(ctx_); delErr != nil {
+		if delErr := bkt.Object(p).Delete(ctx); delErr != nil {
 			logger.Warn("delete part object failed",
 				slog.String("pre", pre),
 				slog.String("part", p),
