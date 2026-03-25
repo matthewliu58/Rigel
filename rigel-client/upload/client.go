@@ -91,7 +91,7 @@ func DirectImp(
 		}
 	}()
 
-	logger.Info("download object success", slog.String("pre", pre),
+	logger.Info("download object success_Time", slog.String("pre", pre),
 		slog.String("objectName", task.ObjectName), slog.Time("time", time.Now()))
 
 	// --------------- 第三步：上传到目标端 ---------------
@@ -115,7 +115,7 @@ func DirectImp(
 			slog.String("index", task.Index), slog.Any("err", err))
 		return err
 	} else {
-		logger.Info("UploadFile success", slog.String("pre", pre),
+		logger.Info("UploadFile success_Time", slog.String("pre", pre),
 			slog.String("index", task.Index))
 	}
 

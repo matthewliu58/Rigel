@@ -298,7 +298,7 @@ func ChunkEventLoop(ctx context.Context, fo base.FileOperateInterfaces, upload b
 				StartChunkSubmitLoop(ctx, chunks, workerPool, upload, true, ev.Indexes, pre, logger)
 
 			case ChunkFinished:
-				logger.Info("ChunkFinished", slog.String("pre", pre),
+				logger.Info("ChunkFinished_Time", slog.String("pre", pre),
 					slog.String("fileName", upload.File.NewFileName), slog.Time("time", time.Now()))
 
 				var parts []string
