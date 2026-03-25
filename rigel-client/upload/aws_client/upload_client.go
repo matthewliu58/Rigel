@@ -32,7 +32,7 @@ type Upload struct {
 // NewUpload 初始化 AWS S3 Upload 实例（完全对齐 GCP 风格）
 func NewUpload(
 	localBaseDir, bucketName, region, accessKey, secretKey string,
-	pre string, // 日志前缀（和 GCP 保持一致）
+	pre string,          // 日志前缀（和 GCP 保持一致）
 	logger *slog.Logger, // 日志实例
 ) *Upload {
 	u := &Upload{
@@ -55,11 +55,11 @@ func NewUpload(
 func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
-	hops string, // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
+	hops string,               // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
 	rateLimiter *rate.Limiter, // 兼容 GCP 入参（如需限流可启用）
 	reader io.ReadCloser,
 	inMemory bool, // true=内存模式，false=文件模式
-	pre string, // 日志前缀（关键追溯字段）
+	pre string,    // 日志前缀（关键追溯字段）
 	logger *slog.Logger,
 ) error {
 	logger.Info("UploadToS3byClient", slog.String("pre", pre))
@@ -88,9 +88,9 @@ func (u *Upload) UploadFile(
 	}
 
 	// 初始化 S3 客户端（带超时控制，对齐 GCP 的 1 分钟超时）
-	ctxClient, cancel := context.WithTimeout(ctx, 1*time.Minute)
-	defer cancel()
-	s3Client, err := u.initS3Client(ctxClient)
+	//ctxClient, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	//defer cancel()
+	s3Client, err := u.initS3Client(ctx)
 	if err != nil {
 		logger.Error("Failed to create S3 client",
 			slog.String("pre", pre),

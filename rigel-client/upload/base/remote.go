@@ -1,6 +1,9 @@
 package base
 
-import "log/slog"
+import (
+	"encoding/json"
+	"log/slog"
+)
 
 type SourceDisk struct {
 	User      string `json:"ssh_user" form:"ssh_user"`             // SSH用户名
@@ -11,11 +14,24 @@ type SourceDisk struct {
 }
 
 func ExtractSourceDiskFromInterface(obj interface{}, pre string, logger *slog.Logger) *SourceDisk {
-	sdObj, ok := obj.(*SourceDisk)
-	if !ok {
-		// 断言失败（类型不匹配），返回 nil 或抛错（按需选择）
-		logger.Error("interface 不是 SourceDisk 类型", slog.Any("pre", pre))
+	if obj == nil {
+		logger.Error("SourceDisk interface is nil", slog.String("pre", pre))
 		return nil
 	}
-	return sdObj
+
+	// 1. 把 interface{} 序列化成 JSON
+	data, err := json.Marshal(obj)
+	if err != nil {
+		logger.Error("marshal SourceDisk interface failed", slog.String("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	// 2. 反序列化到结构体
+	var sd SourceDisk
+	if err := json.Unmarshal(data, &sd); err != nil {
+		logger.Error("unmarshal to SourceDisk failed", slog.String("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	return &sd
 }

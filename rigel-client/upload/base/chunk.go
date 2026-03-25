@@ -1,6 +1,9 @@
 package base
 
-import "log/slog"
+import (
+	"encoding/json"
+	"log/slog"
+)
 
 type Chunk struct {
 	Upload string `json:"upload" form:"upload"` // 上传接口地址
@@ -8,11 +11,24 @@ type Chunk struct {
 }
 
 func ExtractChunkFromInterface(obj interface{}, pre string, logger *slog.Logger) *Chunk {
-	ckObj, ok := obj.(*Chunk)
-	if !ok {
-		// 断言失败（类型不匹配），返回 nil 或抛错（按需选择）
-		logger.Error("interface 不是 Chunk 类型", slog.Any("pre", pre))
+	if obj == nil {
+		logger.Error("Chunk interface is nil", slog.String("pre", pre))
 		return nil
 	}
-	return ckObj
+
+	// 先转 JSON
+	data, err := json.Marshal(obj)
+	if err != nil {
+		logger.Error("marshal chunk interface failed", slog.String("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	// 再反序列化为 Chunk
+	var ck Chunk
+	if err := json.Unmarshal(data, &ck); err != nil {
+		logger.Error("unmarshal to Chunk failed", slog.String("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	return &ck
 }

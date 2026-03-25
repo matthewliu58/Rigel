@@ -1,6 +1,9 @@
 package base
 
-import "log/slog"
+import (
+	"encoding/json"
+	"log/slog"
+)
 
 type AWSConfig struct {
 	BucketName string // S3 桶名
@@ -16,14 +19,21 @@ func ExtractAWSFromInterface(iface interface{}, pre string, logger *slog.Logger)
 		return nil
 	}
 
-	// 类型断言转换为 AWSConfig（需根据实际数据结构调整）
-	awsCfg, ok := iface.(*AWSConfig)
-	if !ok {
-		logger.Error("Convert interface to AWSConfig failed", slog.String("pre", pre))
+	// 1. 先序列化成 JSON
+	data, err := json.Marshal(iface)
+	if err != nil {
+		logger.Error("marshal aws interface failed", slog.String("pre", pre), slog.Any("err", err))
 		return nil
 	}
 
-	// 校验必填字段
+	// 2. 反序列化成 AWSConfig
+	var awsCfg AWSConfig
+	if err := json.Unmarshal(data, &awsCfg); err != nil {
+		logger.Error("unmarshal to AWSConfig failed", slog.String("pre", pre), slog.Any("err", err))
+		return nil
+	}
+
+	// 3. 校验必填字段
 	if awsCfg.BucketName == "" || awsCfg.Region == "" || awsCfg.AccessKey == "" || awsCfg.SecretKey == "" {
 		logger.Error("AWS config missing required fields", slog.String("pre", pre),
 			slog.String("bucket", awsCfg.BucketName),
@@ -31,5 +41,5 @@ func ExtractAWSFromInterface(iface interface{}, pre string, logger *slog.Logger)
 		return nil
 	}
 
-	return awsCfg
+	return &awsCfg
 }
