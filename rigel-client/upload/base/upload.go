@@ -132,7 +132,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		}
 		if clientB {
 			fo.UploadFile = gcp_client.NewUpload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
-			fo.ComposeFile = nil
+			fo.ComposeFile = gcp_proxy.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
 		} else {
 			fo.UploadFile = gcp_proxy.NewUpload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
 			fo.ComposeFile = gcp_proxy.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
@@ -147,7 +147,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		if clientB {
 			// 使用 AWS 客户端模式上传（无合并）
 			fo.UploadFile = aws_client.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
-			fo.ComposeFile = nil
+			fo.ComposeFile = aws.NewCompose(aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
 		} else {
 			// 使用 AWS Proxy 模式上传 + 合并
 			fo.UploadFile = aws.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
@@ -161,7 +161,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		}
 		if clientB {
 			fo.UploadFile = remote_client.NewUpload(ck_.Upload, us.Proxy.LocalDir, pre, logger)
-			fo.ComposeFile = nil
+			fo.ComposeFile = remote_proxy.NewCompose(ck_.Merge, true, pre, logger)
 		} else {
 			fo.UploadFile = remote_proxy.NewUpload(us.Proxy.LocalDir, ck_.Upload, pre, logger)
 			fo.ComposeFile = remote_proxy.NewCompose(ck_.Merge, true, pre, logger)
