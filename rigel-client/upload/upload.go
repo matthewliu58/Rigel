@@ -35,7 +35,7 @@ const (
 const (
 	MaxConcurrency          = 10
 	QueueBufferSize         = 100
-	CheckInterval           = 10 * time.Second // 分块超时检查间隔
+	CheckInterval           = 1 * time.Second  // 分块超时检查间隔
 	ChunkExpireTime         = 10 * time.Second // 分块超时重传阈值
 	UploadTimeout           = 3 * time.Minute  // 整体上传超时时间
 	TaskSubmitRetryInterval = 1 * time.Second
