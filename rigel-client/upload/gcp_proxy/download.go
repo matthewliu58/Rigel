@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type Download struct {
@@ -92,10 +91,10 @@ func (d *Download) DownloadFile(
 	// 创建GCS客户端
 
 	// 创建带超时的上下文
-	ctx_, cancel := context.WithTimeout(ctx, 1*time.Minute)
-	defer cancel()
+	//ctx_, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	//defer cancel()
 
-	client, err := storage.NewClient(ctx_)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create storage client failed: %w", err)
 	}
@@ -107,9 +106,9 @@ func (d *Download) DownloadFile(
 	// 创建Reader（完整/分片读取）
 	var rc *storage.Reader
 	if length <= 0 {
-		rc, err = obj.NewReader(ctx_)
+		rc, err = obj.NewReader(ctx)
 	} else {
-		rc, err = obj.NewRangeReader(ctx_, start, length)
+		rc, err = obj.NewRangeReader(ctx, start, length)
 	}
 	if err != nil {
 		client.Close()
@@ -120,7 +119,7 @@ func (d *Download) DownloadFile(
 	if inMemory {
 		return &gcsReaderWrapper{
 			Reader: rc,
-			cancel: cancel,
+			//cancel: cancel,
 			client: client,
 		}, nil
 	}
@@ -128,7 +127,7 @@ func (d *Download) DownloadFile(
 	// 模式2：inMemory=false → 落盘到本地文件
 	defer func() {
 		rc.Close()
-		cancel()
+		//cancel()
 		client.Close()
 	}()
 
@@ -177,7 +176,7 @@ func (d *Download) DownloadFile(
 // gcsReaderWrapper 封装 storage.Reader + 资源清理逻辑（内存模式用）
 type gcsReaderWrapper struct {
 	*storage.Reader
-	cancel context.CancelFunc
+	//cancel context.CancelFunc
 	client *storage.Client
 }
 
@@ -187,7 +186,7 @@ func (w *gcsReaderWrapper) Close() error {
 	if err := w.Reader.Close(); err != nil {
 		errStr = append(errStr, fmt.Sprintf("reader close failed: %v", err))
 	}
-	w.cancel()
+	//w.cancel()
 	if err := w.client.Close(); err != nil {
 		errStr = append(errStr, fmt.Sprintf("client close failed: %v", err))
 	}
