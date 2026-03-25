@@ -13,8 +13,7 @@ func RedirectImp(
 	fo base.FileOperateInterfaces,
 	task ChunkTask, hops string, rateLimiter *rate.Limiter, inMemory bool, pre string, logger *slog.Logger) error {
 
-	logger.Info("UploadRedirectImp", slog.String("pre", pre),
-		slog.Any("task", task), slog.Time("time", time.Now()))
+	logger.Info("UploadRedirectImp", slog.String("pre", pre), slog.Any("task", task))
 
 	// --------------- 第一步：初始状态设置（Acked=1）---------------
 	// 先获取当前分片的基础信息（避免空指针）
@@ -44,7 +43,7 @@ func RedirectImp(
 	}
 	task.Chunks.Set(task.Index, initialChunkState)
 	logger.Info("set chunk initial state", slog.String("pre", pre), slog.String("index", task.Index),
-		slog.Int("acked", 1), slog.Time("time", time.Now()))
+		slog.Int("acked", 1))
 
 	// 定义defer函数：异常时统一设置Acked=0（兜底）
 	var finalErr error
@@ -62,7 +61,8 @@ func RedirectImp(
 				Acked:       int(ChunkStatusTransferFailed), // 0=传输失败
 			}
 			task.Chunks.Set(task.Index, errorChunkState)
-			logger.Error("chunk transfer failed, set acked=0", slog.String("pre", pre), slog.String("index", task.Index), slog.Any("err", finalErr))
+			logger.Error("chunk transfer failed, set acked=0", slog.String("pre", pre),
+				slog.String("index", task.Index), slog.Any("err", finalErr))
 		}
 	}()
 
@@ -72,7 +72,8 @@ func RedirectImp(
 	select {
 	case <-ctx.Done():
 		finalErr = fmt.Errorf("ctx canceled before get reader: %w", ctx.Err())
-		logger.Error("UploadRedirectImp canceled", slog.String("pre", pre), slog.String("index", task.Index), slog.Any("err", finalErr))
+		logger.Error("UploadRedirectImp canceled", slog.String("pre", pre),
+			slog.String("index", task.Index), slog.Any("err", finalErr))
 		return finalErr
 	default:
 	}
@@ -91,14 +92,15 @@ func RedirectImp(
 	}()
 
 	logger.Info("download object success", slog.String("pre", pre),
-		slog.String("objectName", task.ObjectName), slog.Time("time", time.Now()))
+		slog.String("objectName", task.ObjectName))
 
 	// --------------- 第三步：上传到目标端 ---------------
 	// 核心修改2：上传前检查ctx是否已取消
 	select {
 	case <-ctx.Done():
 		finalErr = fmt.Errorf("ctx canceled before upload: %w", ctx.Err())
-		logger.Error("UploadRedirectImp canceled", slog.String("pre", pre), slog.String("index", task.Index), slog.Any("err", finalErr))
+		logger.Error("UploadRedirectImp canceled", slog.String("pre", pre),
+			slog.String("index", task.Index), slog.Any("err", finalErr))
 		return finalErr
 	default:
 	}
@@ -139,7 +141,7 @@ func RedirectImp(
 	task.Chunks.Set(task.Index, successChunkState)
 	logger.Info("chunk transfer success, set acked=2", slog.String("pre", pre),
 		slog.String("index", task.Index), slog.Time("time", time.Now()))
-	
+
 	logger.Info("UploadRedirectImp success", slog.String("pre", pre))
 	return nil
 }

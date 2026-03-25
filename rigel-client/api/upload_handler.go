@@ -45,8 +45,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 		req.Proxy.LocalDir = LocalBaseDir
 	}
 
-	logger.Info("TransferConfig", slog.String("pre", pre),
-		slog.Any("req", req), slog.Time("time", time.Now()))
+	logger.Info("TransferConfig", slog.String("pre", pre), slog.Any("req", req))
 	return req, nil
 }
 
@@ -57,8 +56,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成5位随机字符串作为请求唯一标识，用于日志追踪
 		requestID := util.GenerateRandomLetters(5)
-		logger.Info("V2ClientUploadHandler start",
-			slog.String("requestID", requestID), slog.Time("time", time.Now()))
+		logger.Info("V2ClientUploadHandler start", slog.String("requestID", requestID))
 
 		// 1. 解析请求头信息，构建上传所需的基础信息（文件名、存储路径、客户端信息等）
 		// 返回值说明：uploadInfo-上传核心信息；_（忽略值）-扩展字段；err-解析错误
@@ -82,7 +80,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		// 3. 上传成功，返回标准化响应
 		logger.Info("V2ClientUploadHandler success", slog.String("requestID", requestID),
 			slog.String("fileName", uploadInfo.File.FileName),
-			slog.String("objectName", uploadInfo.File.NewFileName), slog.Time("time", time.Now()))
+			slog.String("objectName", uploadInfo.File.NewFileName))
 		c.JSON(http.StatusOK, gin.H{
 			"message":    "upload by client success",  // 客户端直传成功提示
 			"file_name":  uploadInfo.File.FileName,    // 原始文件名
@@ -97,7 +95,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 生成请求唯一标识，用于日志追踪
 		pre := util.GenerateRandomLetters(5)
-		logger.Info("V1ProxyUploadHandler start", slog.String("pre", pre), slog.Time("time", time.Now()))
+		logger.Info("V1ProxyUploadHandler start", slog.String("pre", pre))
 
 		// 1. 解析请求头和请求体，构建上传基础信息
 		uploadInfo, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
@@ -126,7 +124,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		// 4. 返回成功响应
 		logger.Info("V1ProxyUploadHandler success", slog.String("pre", pre),
 			slog.String("fileName", uploadInfo.File.FileName),
-			slog.String("objectName", uploadInfo.File.NewFileName), slog.Time("time", time.Now()))
+			slog.String("objectName", uploadInfo.File.NewFileName))
 		c.JSON(http.StatusOK, gin.H{
 			"message":    "upload by proxy success",
 			"file_name":  uploadInfo.File.FileName,
@@ -142,7 +140,8 @@ func getRoutingInfoFromServiceControlPlane(uploadInfo base.UploadStruct, pre str
 	reqBodyBytes, _ := json.Marshal(uploadInfo.EndPoints)
 	req, err := http.NewRequest("POST", config.Config_.ControlHost+RoutingURL, bytes.NewReader(reqBodyBytes))
 	if err != nil {
-		logger.Error("build service B request failed", slog.String("pre", pre), slog.String("err", err.Error()))
+		logger.Error("build service B request failed", slog.String("pre", pre),
+			slog.String("err", err.Error()))
 		return upload.RoutingInfo{}, err
 	}
 
@@ -162,7 +161,8 @@ func getRoutingInfoFromServiceControlPlane(uploadInfo base.UploadStruct, pre str
 	// 读取B服务响应
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error("read service B response failed", slog.String("pre", pre), slog.String("err", err.Error()))
+		logger.Error("read service B response failed", slog.String("pre", pre),
+			slog.String("err", err.Error()))
 		return upload.RoutingInfo{}, err
 	}
 
@@ -175,16 +175,19 @@ func getRoutingInfoFromServiceControlPlane(uploadInfo base.UploadStruct, pre str
 	// 解析B服务响应
 	var apiResp ApiResponse
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		logger.Error("unmarshal service B response failed", slog.String("pre", pre), slog.String("err", err.Error()))
+		logger.Error("unmarshal service B response failed", slog.String("pre", pre),
+			slog.String("err", err.Error()))
 		return upload.RoutingInfo{}, err
 	}
 
 	// 解析路由信息
 	reqDataBytes, _ := json.Marshal(apiResp.Data)
-	logger.Info("get service control plane response", slog.String("pre", pre), slog.String("responseData", string(reqDataBytes)))
+	logger.Info("get service control plane response", slog.String("pre", pre),
+		slog.String("responseData", string(reqDataBytes)))
 	var routingInfo upload.RoutingInfo
 	if err := json.Unmarshal(reqDataBytes, &routingInfo); err != nil {
-		logger.Error("unmarshal routing info failed", slog.String("pre", pre), slog.String("err", err.Error()))
+		logger.Error("unmarshal routing info failed", slog.String("pre", pre),
+			slog.String("err", err.Error()))
 		return upload.RoutingInfo{}, err
 	}
 

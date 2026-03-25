@@ -546,7 +546,7 @@ func UploadFunc(
 	pre string, // 保留原有pre入参
 	logger *slog.Logger) error {
 
-	logger.Info("UploadFunc", slog.String("pre", pre), slog.Any("us", us), slog.Time("time", time.Now()))
+	logger.Info("UploadFunc", slog.String("pre", pre), slog.Any("us", us))
 
 	// 核心修复1：创建带全局超时的可取消上下文（管控所有goroutine）
 	ctx, cancel := context.WithTimeout(context.Background(), UploadTimeout)
@@ -571,7 +571,7 @@ func UploadFunc(
 		return fmt.Errorf("%w: %s", ErrFileSizeFailed, err.Error())
 	}
 	logger.Info("Get file size success", slog.String("pre", pre),
-		slog.Int64("size", fileSize), slog.Time("time", time.Now()))
+		slog.Int64("size", fileSize))
 
 	// 4. 文件分块
 	chunks := util.NewSafeMap()
@@ -581,8 +581,7 @@ func UploadFunc(
 		logger.Error("Split file failed", slog.String("pre", pre), slog.Any("err", err))
 		return fmt.Errorf("%w: %s", ErrChunkSplitFailed, err.Error())
 	} else {
-		logger.Info("Split file success", slog.String("pre", pre),
-			slog.Int64("size", fileSize), slog.Time("time", time.Now()))
+		logger.Info("Split file success", slog.String("pre", pre), slog.Int64("size", fileSize))
 	}
 
 	//inMemory := false
@@ -611,8 +610,7 @@ func UploadFunc(
 	newFileName := us.File.NewFileName
 	select {
 	case <-done:
-		logger.Info("Function finished", slog.String("pre", pre),
-			slog.String("newFileName", newFileName), slog.Time("time", time.Now()))
+		logger.Info("Function finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
 	case <-ctx.Done():
 		// 超时/取消触发
 		err := ctx.Err()
@@ -624,8 +622,7 @@ func UploadFunc(
 		return fmt.Errorf("upload canceled: %w", err)
 	}
 
-	logger.Info("UploadFunc finished", slog.String("pre", pre),
-		slog.String("newFileName", newFileName), slog.Time("time", time.Now()))
+	logger.Info("UploadFunc finished", slog.String("pre", pre), slog.String("newFileName", newFileName))
 	return nil
 }
 
