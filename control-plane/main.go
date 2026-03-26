@@ -13,7 +13,6 @@ import (
 	"control-plane/sync/etcd_server"
 	"control-plane/util"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,6 +20,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 自定义Handler：修复slog.Context为context.Context，兼容所有Go 1.21+版本
