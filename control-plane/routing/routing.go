@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+type Path struct {
+	path []string
+	cost float64
+}
+
 type PathInfo struct {
 	Hops string `json:"hops"`
 	Rate int64  `json:"rate"`
@@ -62,18 +67,8 @@ func (g *GraphManager) Routing(endPoints EndPoints, pre string, logger *slog.Log
 	serverFull := fmt.Sprintf("%s_%s_%s",
 		endPoints.Dest.Provider, endPoints.Dest.Region, endPoints.Dest.ID)
 
-	//没有到该cloud storage的路径
-	if _, ok := g.FindEdgeBySuffix(serverFull); !ok {
-		logger.Warn("No cloud node found", slog.String("pre", pre), slog.String("serverFull", serverFull))
-		return RoutingInfo{}
-	}
-
 	// 遍历 start × end 节点组合，寻找最短路径
 	var bestPath []string
-	type Path struct {
-		path []string
-		cost float64
-	}
 	var tempPaths []Path
 	minCost := math.Inf(1)
 	for _, sNode := range startNodes {
@@ -89,6 +84,11 @@ func (g *GraphManager) Routing(endPoints EndPoints, pre string, logger *slog.Log
 	}
 	logger.Info("All candidate paths", slog.String("pre", pre),
 		slog.String("paths", fmt.Sprintf("%+v", tempPaths)))
+
+	if len(bestPath) == 0 {
+		logger.Warn("No cloud node found", slog.String("pre", pre), slog.String("serverFull", serverFull))
+		return RoutingInfo{}
+	}
 
 	// 输出结果
 	if len(bestPath) == 0 {
