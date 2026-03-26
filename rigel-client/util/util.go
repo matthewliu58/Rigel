@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/bits"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -25,90 +26,95 @@ func GenerateRandomLetters(length int) string {
 	return result
 }
 
-// AutoSelectChunkSize 根据文件大小自动选择最优分片大小（直接返回字节数，无字符串解析）
-// 参数：totalSize - 文件总大小（字节）
-// 返回：最优分片大小（字节，如 1048576 对应1M，67108864对应64M）
+// AutoSelectChunkSize 自动最优分片：10片左右 + 对齐到2的次方 + 最小64M / 最大2G
 func AutoSelectChunkSize(totalSize int64) int64 {
-	const (
-		_64M  = 64 << 20  // 64MB
-		_256M = 256 << 20 // 256MB
-		_512M = 512 << 20 // 512MB
-		_1G   = 1 << 30   // 1GB
-	)
-
-	switch {
-	case totalSize < 1<<30: // < 1GB
-		return _64M
-	case totalSize < 5<<30: // < 5GB
-		return _256M
-	case totalSize < 20<<30: // < 20GB → 直接用 512MB！
-		return _512M
-	default: // >= 20GB → 1GB
-		return _1G
+	if totalSize <= 0 {
+		return 64 << 20
 	}
+
+	// 1. 目标 10 片，四舍五入计算
+	const targetParts = 10
+	chunkSize := (totalSize + targetParts/2) / targetParts
+
+	// 2. 核心：先对齐到最近的 2 的次方（你要求放这里！）
+	if chunkSize > 0 {
+		chunkSize = 1 << bits.Len64(uint64(chunkSize)-1)
+	}
+
+	// 3. 最后限制范围：最小64M，最大2G
+	const minChunk = 64 << 20 // 64MB
+	const maxChunk = 2 << 30  // 2GB
+
+	if chunkSize < minChunk {
+		return minChunk
+	}
+	if chunkSize > maxChunk {
+		return maxChunk
+	}
+	return chunkSize
 }
 
-// autoSelectBs 根据读取的总大小自动选择最优块大小
+// AutoSelectBs 严格匹配，返回标准大写格式
 func AutoSelectBs(totalSize int64) string {
-	const (
-		_1GB  = 1 << 30  // 1GB
-		_5GB  = 5 << 30  // 5GB
-		_20GB = 20 << 30 // 20GB
-	)
+	chunkSize := AutoSelectChunkSize(totalSize)
 
-	switch {
-	case totalSize < _1GB:
-		return "64M"
-	case totalSize < _5GB:
-		return "256M"
-	case totalSize < _20GB:
-		return "512M"
-	default:
+	switch chunkSize {
+	case 2 << 30:
+		return "2G"
+	case 1 << 30:
 		return "1G"
+	case 512 << 20:
+		return "512M"
+	case 256 << 20:
+		return "256M"
+	case 128 << 20:
+		return "128M"
+	case 64 << 20:
+		return "64M"
+	default:
+		return "64M"
 	}
 }
 
-// parseBsToBytes 解析bs字符串为字节数（如1G→1073741824）
+// ParseBsToBytes 兼容大小写解析
 func ParseBsToBytes(bs string) (int64, error) {
 	bs = strings.TrimSpace(strings.ToLower(bs))
 	if bs == "" {
-		return 0, fmt.Errorf("bs不能为空")
+		return 0, errors.New("bs 不能为空")
 	}
 
-	var numStr, unit string
-	for i, c := range bs {
-		if (c >= '0' && c <= '9') || c == '.' {
-			numStr += string(c)
+	var numPart string
+	var unitPart string
+	for i, ch := range bs {
+		if ch >= '0' && ch <= '9' {
+			numPart += string(ch)
 		} else {
-			unit = bs[i:]
+			unitPart = bs[i:]
 			break
 		}
 	}
 
-	if numStr == "" {
-		return 0, fmt.Errorf("无法解析bs的数字部分：%s", bs)
+	if numPart == "" {
+		return 0, fmt.Errorf("无效的 bs 格式: %s", bs)
 	}
 
-	num, err := strconv.ParseFloat(numStr, 64)
+	num, err := strconv.ParseInt(numPart, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("解析bs数字失败：%w，输入：%s", err, numStr)
+		return 0, err
 	}
 
-	var bytes float64
-	switch unit {
+	switch unitPart {
 	case "k", "kb":
-		bytes = num * 1024
+		return num * 1024, nil
 	case "m", "mb":
-		bytes = num * 1024 * 1024
+		return num << 20, nil
 	case "g", "gb":
-		bytes = num * 1024 * 1024 * 1024
+		return num << 30, nil
 	case "t", "tb":
-		bytes = num * 1024 * 1024 * 1024 * 1024
+		return num << 40, nil
 	default:
-		bytes = num // 无单位则为字节
+		return num, nil
 	}
-
-	return int64(bytes), nil
 }
 
 // SortPartStrings 按part后的数字升序排序part字符串（如aa.part.4 → 按数字4排序）
