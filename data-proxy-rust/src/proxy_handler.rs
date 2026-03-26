@@ -157,5 +157,5 @@ pub async fn proxy_handler(mut req: Request<Body>) -> impl IntoResponse {
         "Request completed"
     );
 
-    response
+    response.into_response()
 }
