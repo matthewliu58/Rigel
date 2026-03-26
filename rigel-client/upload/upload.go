@@ -434,6 +434,7 @@ func UploadFunc_(
 // Upload 核心入口：保留pre入参，上下文透传 + 统一取消所有goroutine
 func UploadFunc(
 	clientB bool,
+	fileSize int64,
 	us base.UploadStruct,
 	handler func(base.FileOperateInterfaces, ChunkTask, string, *rate.Limiter, bool, string, *slog.Logger) error,
 	routing RoutingInfo,
@@ -454,16 +455,17 @@ func UploadFunc(
 	fo := base.InitInterface(clientB, us, pre, logger)
 
 	// 3. 获取文件真实长度
-	var fileSize int64
 	var err error
-	if fo.GetFileSize == nil {
-		logger.Info("GetFileSize is nil, use default implementation")
-		return fmt.Errorf("%w: GetFileSize is nil", ErrInterfaceNotImplemented)
-	}
-	fileSize, err = fo.GetFileSize.GetFileSize(ctx, us.File.FileName, pre, logger)
-	if err != nil {
-		logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
-		return fmt.Errorf("%w: %s", ErrFileSizeFailed, err.Error())
+	if fileSize <= 0 {
+		if fo.GetFileSize == nil {
+			logger.Info("GetFileSize is nil, use default implementation")
+			return fmt.Errorf("%w: GetFileSize is nil", ErrInterfaceNotImplemented)
+		}
+		fileSize, err = fo.GetFileSize.GetFileSize(ctx, us.File.FileName, pre, logger)
+		if err != nil {
+			logger.Error("Get file size failed", slog.String("pre", pre), slog.Any("err", err))
+			return fmt.Errorf("%w: %s", ErrFileSizeFailed, err.Error())
+		}
 	}
 	logger.Info("Get file size success", slog.String("pre", pre),
 		slog.Int64("size", fileSize))

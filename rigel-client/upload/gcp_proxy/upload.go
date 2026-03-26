@@ -3,6 +3,7 @@ package gcp_proxy
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/time/rate"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	cfg "rigel-client/config"
 	"rigel-client/limit_rate"
 	"rigel-client/util"
 	"strings"
@@ -122,8 +124,11 @@ func (u *Upload) UploadFile(
 		return err
 	}
 
-	//todo 如果first为本机ip 直接改成127.0.0.1不走public
+	//如果first为本机ip 直接改成127.0.0.1不走public
 	firstHop := hopList[0]
+	if firstHop == cfg.PublicIp {
+		firstHop = "127.0.0.1"
+	}
 
 	url := fmt.Sprintf(
 		"http://%s/%s/%s",

@@ -6,9 +6,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"rigel-client/util"
 )
 
-var Config_ *Config
+var (
+	Config_  *Config
+	PublicIp string
+)
 
 // Config 一级结构体，对应yaml平级配置
 type Config struct {
@@ -42,6 +46,11 @@ func ReadYamlConfig(logger *slog.Logger) (*Config, error) {
 	var config Config
 	if err := yaml.Unmarshal(content, &config); err != nil {
 		return nil, fmt.Errorf("解析yaml失败: %w", err)
+	}
+
+	PublicIp, err = util.GetPublicIP()
+	if err != nil {
+		logger.Warn("获取公网IP失败，将使用内网IP", slog.Any("err", err))
 	}
 
 	return &config, nil

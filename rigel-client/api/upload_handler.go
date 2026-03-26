@@ -12,6 +12,7 @@ import (
 	"rigel-client/upload"
 	"rigel-client/upload/base"
 	"rigel-client/util"
+	"strconv"
 	"time"
 )
 
@@ -27,18 +28,24 @@ var (
 // ParseHeadersAndBuildUploadInfo 一站式处理请求头解析、校验、UploadInfo构造
 // 入参：Gin上下文、日志前缀、日志器
 // 出参：构造好的UploadInfo / 是否已向客户端返回响应（避免重复响应）/ 错误信息
-func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (base.UploadStruct, error) {
+func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Logger) (base.UploadStruct, int64, error) {
 
 	logger.Info("Start parsing upload info", slog.String("pre", pre))
 
 	//todo file size 可以通过 header传入 省的计算
+	sizeStr := c.GetHeader(util.HeaderFileSize)
+	fileSize, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil {
+		// 转换失败处理：比如返回错误响应
+		logger.Warn("Failed to parse file size", slog.String("pre", pre), slog.String("sizeStr", sizeStr))
+	}
 
 	var req base.UploadStruct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errMsg := fmt.Sprintf("Failed to parse request body: %v", err)
 		logger.Error(errMsg, slog.String("pre", pre))
 		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg})
-		return base.UploadStruct{}, fmt.Errorf(errMsg)
+		return base.UploadStruct{}, 0, fmt.Errorf(errMsg)
 	}
 
 	if req.Source.Type == util.LocalDisk {
@@ -46,7 +53,7 @@ func ParseHeadersAndBuildUploadInfo(c *gin.Context, pre string, logger *slog.Log
 	}
 
 	logger.Info("TransferConfig", slog.String("pre", pre), slog.Any("req", req))
-	return req, nil
+	return req, fileSize, nil
 }
 
 // V2ClientUploadHandler V2版本客户端直传文件处理器
@@ -60,7 +67,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 
 		// 1. 解析请求头信息，构建上传所需的基础信息（文件名、存储路径、客户端信息等）
 		// 返回值说明：uploadInfo-上传核心信息；_（忽略值）-扩展字段；err-解析错误
-		uploadInfo, err := ParseHeadersAndBuildUploadInfo(c, requestID, logger)
+		uploadInfo, fileSize, err := ParseHeadersAndBuildUploadInfo(c, requestID, logger)
 		if err != nil {
 			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
@@ -68,7 +75,7 @@ func V1ClientUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		// 2. 调用客户端直传实现上传文件到存储服务（C服务）
 		// UploadDirectImp：客户端直传实现（区别于V1的代理转发实现）
 		// 参数说明：uploadInfo-上传信息；UploadDirectImp-直传实现函数；true-是否开启并发；requestID-请求标识；logger-日志实例
-		if err := upload.UploadFunc(true, uploadInfo, upload.DirectImp,
+		if err := upload.UploadFunc(true, fileSize, uploadInfo, upload.DirectImp,
 			upload.RoutingInfo{}, false, requestID, logger); err != nil {
 			logger.Error("client direct upload failed", slog.String("requestID", requestID),
 				slog.Any("err", err))
@@ -98,7 +105,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		logger.Info("V1ProxyUploadHandler start", slog.String("pre", pre))
 
 		// 1. 解析请求头和请求体，构建上传基础信息
-		uploadInfo, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
+		uploadInfo, fileSize, err := ParseHeadersAndBuildUploadInfo(c, pre, logger)
 		if err != nil {
 			return // 错误已在ParseHeadersAndBuildUploadInfo内部处理并返回响应
 		}
@@ -115,7 +122,7 @@ func V1ProxyUploadHandler(logger *slog.Logger) gin.HandlerFunc {
 		}
 
 		// 3. 上传文件到C服务
-		if err := upload.UploadFunc(false, uploadInfo, upload.RedirectImp,
+		if err := upload.UploadFunc(false, fileSize, uploadInfo, upload.RedirectImp,
 			routingInfo, false, pre, logger); err != nil {
 			handleError(c, logger, pre, http.StatusInternalServerError, "upload to service C failed", err)
 			return

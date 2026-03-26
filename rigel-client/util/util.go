@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -275,4 +276,19 @@ func ReplaceUploadURLHost(originalUploadURL, firstHop string) (string, error) {
 	}
 
 	return resultURL, nil
+}
+
+func GetPublicIP() (string, error) {
+	resp, err := http.Get("https://icanhazip.com")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	buf := make([]byte, 1024)
+	n, err := resp.Body.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(buf[:n])), nil
 }

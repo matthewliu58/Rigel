@@ -9,6 +9,7 @@ const (
 
 const (
 	HeaderFileName         = "X-File-Name"  // 最终合并后的文件名
+	HeaderFileSize         = "X-File-Size"  // 分片大小
 	HeaderChunkName        = "X-Chunk-Name" // 单个分片的自定义名称
 	HeaderXHops            = "X-Hops"
 	HeaderXChunkIndex      = "X-Chunk-Index"
