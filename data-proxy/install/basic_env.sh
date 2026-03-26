@@ -41,7 +41,7 @@ cat << EOF >> "$BASHRC"
 export GOROOT=/usr/local/go
 export GOPATH=\$HOME/go
 export PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
-export GOPROXY="https://proxy.ganggang.tech,direct"
+export GOPROXY="https://proxy.golang.org,direct"
 EOF
 fi
 
@@ -74,13 +74,13 @@ cargo --version
 rustup --version
 
 # ========== 自动安装项目必需依赖 ==========
-echo -e "\n==> Install required Rust dependencies for data-proxy"
-cargo add futures_util
-cargo add bytes
-cargo add once_cell
-cargo add sysinfo
-cargo add tracing
-cargo add hyper-tls
+#echo -e "\n==> Install required Rust dependencies for data-proxy"
+#cargo add futures_util
+#cargo add bytes
+#cargo add once_cell
+#cargo add sysinfo
+#cargo add tracing
+#cargo add hyper-tls
 
 # ===== 结束 =====
 echo -e "\n==> All installation done!"
