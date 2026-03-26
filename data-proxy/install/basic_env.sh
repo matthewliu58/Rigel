@@ -41,13 +41,13 @@ cat << EOF >> "$BASHRC"
 export GOROOT=/usr/local/go
 export GOPATH=\$HOME/go
 export PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
-export GOPROXY="https://proxy.golang.org,direct"
+export GOPROXY="https://proxy.ganggang.tech,direct"
 EOF
 fi
 
 mkdir -p "$HOME/go"
 
-# ===== 立即生效 =====
+# ===== 立即生效 Go 环境（关键！不用再 source ~/.bashrc）=====
 export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
@@ -56,7 +56,7 @@ export PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 echo -e "\n==> Install Rust (Stable)"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-# 让 Rust 立即生效（不重启终端也能用）
+# 让 Rust 立即生效（关键！不用重启终端）
 source $HOME/.cargo/env
 
 # 写入环境变量到 bashrc（永久生效）
@@ -72,6 +72,15 @@ echo "==> Verify Rust installation"
 rustc --version
 cargo --version
 rustup --version
+
+# ========== 自动安装项目必需依赖 ==========
+echo -e "\n==> Install required Rust dependencies for data-proxy"
+cargo add futures_util
+cargo add bytes
+cargo add once_cell
+cargo add sysinfo
+cargo add tracing
+cargo add hyper-tls
 
 # ===== 结束 =====
 echo -e "\n==> All installation done!"
