@@ -3,7 +3,6 @@ package gcp_proxy
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/time/rate"
 	"io"
