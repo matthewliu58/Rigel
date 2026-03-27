@@ -102,8 +102,10 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 			logger.Error("Extract AWS Source Interface failed", slog.String("pre", pre))
 			return fo
 		}
-		fo.GetFileSize = aws.NewGetSize(aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
-		fo.DownloadFile = aws.NewDownload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
+		fo.GetFileSize = aws.NewGetSize(aws_.BucketName, aws_.Region,
+			aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
+		fo.DownloadFile = aws.NewDownload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
+			aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 
 	case util.LocalDisk:
 		fo.GetFileSize = local_disk.NewGetSize(us.Proxy.LocalDir, pre, logger)
@@ -145,13 +147,15 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 			return fo
 		}
 		if clientB {
-			// 使用 AWS 客户端模式上传（无合并）
-			fo.UploadFile = aws_client.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
-			fo.ComposeFile = aws.NewCompose(aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
+			fo.UploadFile = aws_client.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
+				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
+			fo.ComposeFile = aws.NewCompose(aws_.BucketName, aws_.Region,
+				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 		} else {
-			// 使用 AWS Proxy 模式上传 + 合并
-			fo.UploadFile = aws.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
-			fo.ComposeFile = aws.NewCompose(aws_.BucketName, aws_.Region, aws_.AccessKey, aws_.SecretKey, pre, logger)
+			fo.UploadFile = aws.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
+				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
+			fo.ComposeFile = aws.NewCompose(aws_.BucketName, aws_.Region,
+				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 		}
 
 	case util.RemoteDisk:

@@ -29,15 +29,18 @@ type Compose struct {
 
 // NewCompose 初始化 AWS S3 Compose 实例（对齐 GCP NewCompose）
 func NewCompose(
-	bucket, region, accessKey, secretKey string,
+	bucket, region, accessKey, secretKey, endpoint string,
+	usePathStyle bool,
 	pre string,
 	logger *slog.Logger,
 ) *Compose {
 	c := &Compose{
-		bucket:    bucket,
-		region:    region,
-		accessKey: accessKey,
-		secretKey: secretKey,
+		bucket:       bucket,
+		region:       region,
+		accessKey:    accessKey,
+		secretKey:    secretKey,
+		endpoint:     endpoint,
+		usePathStyle: usePathStyle,
 	}
 	logger.Info("NewCompose", slog.String("pre", pre), slog.Any("Compose", *c))
 	return c

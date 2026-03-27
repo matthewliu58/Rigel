@@ -29,15 +29,18 @@ type GetSize struct {
 
 // NewGetSize 初始化 AWS S3 GetSize 实例（对齐 GCP NewGetSize）
 func NewGetSize(
-	bucketName, region, accessKey, secretKey string,
+	bucketName, region, accessKey, secretKey, endpoint string,
+	usePathStyle bool,
 	pre string,
 	logger *slog.Logger,
 ) *GetSize {
 	gs := &GetSize{
-		bucketName: bucketName,
-		region:     region,
-		accessKey:  accessKey,
-		secretKey:  secretKey,
+		bucketName:   bucketName,
+		region:       region,
+		accessKey:    accessKey,
+		secretKey:    secretKey,
+		endpoint:     endpoint,
+		usePathStyle: usePathStyle,
 	}
 	// 和 GCP 完全一致的日志打印逻辑
 	logger.Info("NewGetSize", slog.String("pre", pre), slog.Any("GetSize", *gs))

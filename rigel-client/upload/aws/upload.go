@@ -42,7 +42,8 @@ type Upload struct {
 
 // NewUpload 初始化 AWS S3 Upload 实例（对齐 GCP NewUpload）
 func NewUpload(
-	localBaseDir, bucketName, region, accessKey, secretKey string,
+	localBaseDir, bucketName, region, accessKey, secretKey, endpoint string,
+	usePathStyle bool,
 	pre string, // 日志前缀
 	logger *slog.Logger,
 ) *Upload {
@@ -52,6 +53,8 @@ func NewUpload(
 		region:       region,
 		accessKey:    accessKey,
 		secretKey:    secretKey,
+		endpoint:     endpoint,
+		usePathStyle: usePathStyle,
 	}
 	// 和 GCP 完全一致的日志打印逻辑
 	logger.Info("NewUpload", slog.String("pre", pre), slog.Any("Upload", *u))

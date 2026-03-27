@@ -31,7 +31,8 @@ type Download struct {
 
 // NewDownload 初始化 AWS S3 Download 实例（对齐 GCP NewDownload）
 func NewDownload(
-	localBaseDir, bucketName, region, accessKey, secretKey string,
+	localBaseDir, bucketName, region, accessKey, secretKey, endpoint string,
+	usePathStyle bool,
 	pre string,
 	logger *slog.Logger,
 ) *Download {
@@ -41,6 +42,8 @@ func NewDownload(
 		region:       region,
 		accessKey:    accessKey,
 		secretKey:    secretKey,
+		endpoint:     endpoint,
+		usePathStyle: usePathStyle,
 	}
 	logger.Info("NewDownload", slog.String("pre", pre), slog.Any("Download", *d))
 	return d
