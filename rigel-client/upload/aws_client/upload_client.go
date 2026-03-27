@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // =====================
@@ -148,11 +147,11 @@ func (u *Upload) UploadFile(
 
 	// 构建 S3 上传请求（对齐 GCP 的 StorageClass/ContentType）
 	putInput := &s3.PutObjectInput{
-		Bucket:       aws.String(u.bucketName),
-		Key:          aws.String(objectName),
-		Body:         uploadBody,
-		ContentType:  aws.String("application/octet-stream"), // 和 GCP 一致
-		StorageClass: types.StorageClassStandard,             // 对应 GCP 的 STANDARD
+		Bucket:      aws.String(u.bucketName),
+		Key:         aws.String(objectName),
+		Body:        uploadBody,
+		ContentType: aws.String("application/octet-stream"), // 和 GCP 一致
+		//StorageClass: types.StorageClassStandard,
 	}
 
 	// 执行上传（传入外层 ctx，支持中途取消）
