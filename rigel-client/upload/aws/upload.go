@@ -247,10 +247,6 @@ func (u *Upload) UploadFile(
 	return nil
 }
 
-// =====================
-// AWS 签名辅助函数
-// =====================
-
 // getSignatureKey 生成 AWS 签名密钥（AWS4 规范）
 func getSignatureKey(secretKey, dateStamp, region, service string) []byte {
 	kDate := hmacSHA256([]byte("AWS4"+secretKey), []byte(dateStamp))
