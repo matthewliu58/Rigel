@@ -6,10 +6,12 @@ import (
 )
 
 type AWSConfig struct {
-	BucketName string // S3 桶名
-	Region     string // AWS 区域
-	AccessKey  string // Access Key
-	SecretKey  string // Secret Key
+	BucketName   string `json:"bucketName"`   // S3 桶名
+	Region       string `json:"region"`       // AWS 区域
+	AccessKey    string `json:"accessKey"`    // Access Key
+	SecretKey    string `json:"secretKey"`    // Secret Key
+	Endpoint     string `json:"endpoint"`     // 留空 = AWS 官方
+	UsePathStyle bool   `json:"usePathStyle"` // S3 兼容存储必须开
 }
 
 // ExtractAWSFromInterface 从接口中提取 AWS 配置（仿照 ExtractGCPFromInterface 实现）

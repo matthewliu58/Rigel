@@ -27,12 +27,14 @@ type Upload struct {
 	region       string // AWS 区域
 	accessKey    string // AWS Access Key ID
 	secretKey    string // AWS Secret Access Key
+	endpoint     string // 留空 = AWS 官方
+	usePathStyle bool
 }
 
 // NewUpload 初始化 AWS S3 Upload 实例（完全对齐 GCP 风格）
 func NewUpload(
 	localBaseDir, bucketName, region, accessKey, secretKey string,
-	pre string, // 日志前缀（和 GCP 保持一致）
+	pre string,          // 日志前缀（和 GCP 保持一致）
 	logger *slog.Logger, // 日志实例
 ) *Upload {
 	u := &Upload{
@@ -55,11 +57,11 @@ func NewUpload(
 func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
-	hops string, // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
+	hops string,               // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
 	rateLimiter *rate.Limiter, // 兼容 GCP 入参（如需限流可启用）
 	reader io.ReadCloser,
 	inMemory bool, // true=内存模式，false=文件模式
-	pre string, // 日志前缀（关键追溯字段）
+	pre string,    // 日志前缀（关键追溯字段）
 	logger *slog.Logger,
 ) error {
 	logger.Info("UploadToS3byClient", slog.String("pre", pre))
@@ -184,22 +186,22 @@ func (u *Upload) UploadFile(
 
 // initS3Client 初始化 S3 客户端（带超时配置）
 func (u *Upload) initS3Client(ctx context.Context) (*s3.Client, error) {
-	// 自定义 HTTP 客户端（超时配置，对齐 GCP 客户端超时逻辑）
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout:   15 * time.Second, // TCP 连接超时
+				Timeout:   15 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
-			TLSHandshakeTimeout:   10 * time.Second, // TLS 握手超时
-			ResponseHeaderTimeout: 10 * time.Second, // 响应头超时
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
-	// 加载 AWS 配置（凭证+区域）
-	cfg, err := config.LoadDefaultConfig(ctx,
+	// 基础配置
+	loadOpts := []func(*config.LoadOptions) error{
 		config.WithRegion(u.region),
+		config.WithHTTPClient(httpClient),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 			return aws.Credentials{
 				AccessKeyID:     u.accessKey,
@@ -207,14 +209,31 @@ func (u *Upload) initS3Client(ctx context.Context) (*s3.Client, error) {
 				Source:          "custom-config",
 			}, nil
 		})),
-		config.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load AWS config failed: %w", err)
 	}
 
-	// 创建 S3 客户端
-	return s3.NewFromConfig(cfg), nil
+	//如果有 Endpoint，就覆盖（适配所有S3兼容）
+	if u.endpoint != "" {
+		endpointResolver := aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL:           u.endpoint,
+					SigningRegion: u.region,
+				}, nil
+			},
+		)
+		loadOpts = append(loadOpts, config.WithEndpointResolverWithOptions(endpointResolver))
+	}
+
+	// 加载配置
+	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("load config failed: %w", err)
+	}
+
+	// 创建客户端，自动控制 PathStyle
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = u.usePathStyle
+	}), nil
 }
 
 // =====================

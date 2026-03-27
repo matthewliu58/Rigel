@@ -17,14 +17,14 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// =====================
-// 核心结构体（对齐 GCP Compose）
-// =====================
+// 核心结构体
 type Compose struct {
-	bucket    string // S3 存储桶名称
-	region    string // AWS 区域
-	accessKey string // AWS Access Key ID
-	secretKey string // AWS Secret Access Key
+	bucket       string // S3 存储桶名称
+	region       string // AWS 区域
+	accessKey    string // AWS Access Key ID
+	secretKey    string // AWS Secret Access Key
+	endpoint     string // 留空 = AWS 官方
+	usePathStyle bool
 }
 
 // NewCompose 初始化 AWS S3 Compose 实例（对齐 GCP NewCompose）
@@ -269,13 +269,8 @@ func (c *Compose) ComposeFile(
 	return nil
 }
 
-// =====================
-// 内部工具函数
-// =====================
-
 // initS3Client 初始化 S3 客户端（带超时配置）
-func (c *Compose) initS3Client(ctx context.Context) (*s3.Client, error) {
-	// 自定义 HTTP 客户端（超时配置）
+func (u *Compose) initS3Client(ctx context.Context) (*s3.Client, error) {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
@@ -288,24 +283,42 @@ func (c *Compose) initS3Client(ctx context.Context) (*s3.Client, error) {
 		},
 	}
 
-	// 加载 AWS 配置
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(c.region),
+	// 基础配置
+	loadOpts := []func(*config.LoadOptions) error{
+		config.WithRegion(u.region),
+		config.WithHTTPClient(httpClient),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 			return aws.Credentials{
-				AccessKeyID:     c.accessKey,
-				SecretAccessKey: c.secretKey,
+				AccessKeyID:     u.accessKey,
+				SecretAccessKey: u.secretKey,
 				Source:          "custom-config",
 			}, nil
 		})),
-		config.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load aws config failed: %w", err)
 	}
 
-	// 创建 S3 客户端
-	return s3.NewFromConfig(cfg), nil
+	//如果有 Endpoint，就覆盖（适配所有S3兼容）
+	if u.endpoint != "" {
+		endpointResolver := aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL:           u.endpoint,
+					SigningRegion: u.region,
+				}, nil
+			},
+		)
+		loadOpts = append(loadOpts, config.WithEndpointResolverWithOptions(endpointResolver))
+	}
+
+	// 加载配置
+	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("load config failed: %w", err)
+	}
+
+	// 创建客户端，自动控制 PathStyle
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = u.usePathStyle
+	}), nil
 }
 
 // mergePartsToTempFile 合并分片到临时文件（S3 兼容合成逻辑）

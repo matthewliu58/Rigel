@@ -19,10 +19,12 @@ import (
 // 核心结构体（对齐 GCP GetSize）
 // =====================
 type GetSize struct {
-	bucketName string // S3 存储桶名称
-	region     string // AWS 区域
-	accessKey  string // AWS Access Key ID
-	secretKey  string // AWS Secret Access Key
+	bucketName   string // S3 存储桶名称
+	region       string // AWS 区域
+	accessKey    string // AWS Access Key ID
+	secretKey    string // AWS Secret Access Key
+	endpoint     string // 留空 = AWS 官方
+	usePathStyle bool
 }
 
 // NewGetSize 初始化 AWS S3 GetSize 实例（对齐 GCP NewGetSize）
@@ -114,38 +116,55 @@ func (g *GetSize) GetFileSize(ctx context.Context, filename string, pre string, 
 // =====================
 
 // initS3Client 初始化 S3 客户端（带超时配置）
-func (g *GetSize) initS3Client(ctx context.Context) (*s3.Client, error) {
-	// 自定义 HTTP 客户端（超时配置）
+func (u *GetSize) initS3Client(ctx context.Context) (*s3.Client, error) {
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout:   15 * time.Second, // TCP 连接超时
+				Timeout:   15 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
-			TLSHandshakeTimeout:   10 * time.Second, // TLS 握手超时
-			ResponseHeaderTimeout: 10 * time.Second, // 响应头超时
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
 	}
 
-	// 加载 AWS 配置
-	cfg, err := config.LoadDefaultConfig(ctx,
-		config.WithRegion(g.region),
+	// 基础配置
+	loadOpts := []func(*config.LoadOptions) error{
+		config.WithRegion(u.region),
+		config.WithHTTPClient(httpClient),
 		config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(ctx context.Context) (aws.Credentials, error) {
 			return aws.Credentials{
-				AccessKeyID:     g.accessKey,
-				SecretAccessKey: g.secretKey,
+				AccessKeyID:     u.accessKey,
+				SecretAccessKey: u.secretKey,
 				Source:          "custom-config",
 			}, nil
 		})),
-		config.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("load aws config failed: %w", err)
 	}
 
-	// 创建 S3 客户端
-	return s3.NewFromConfig(cfg), nil
+	//如果有 Endpoint，就覆盖（适配所有S3兼容）
+	if u.endpoint != "" {
+		endpointResolver := aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					URL:           u.endpoint,
+					SigningRegion: u.region,
+				}, nil
+			},
+		)
+		loadOpts = append(loadOpts, config.WithEndpointResolverWithOptions(endpointResolver))
+	}
+
+	// 加载配置
+	cfg, err := config.LoadDefaultConfig(ctx, loadOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("load config failed: %w", err)
+	}
+
+	// 创建客户端，自动控制 PathStyle
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = u.usePathStyle
+	}), nil
 }
 
 // formatBytes 将字节数转换为易读的字符串（完全复用 GCP 的实现）

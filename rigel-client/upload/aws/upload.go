@@ -36,6 +36,8 @@ type Upload struct {
 	region       string // AWS 区域
 	accessKey    string // AWS Access Key ID
 	secretKey    string // AWS Secret Access Key
+	endpoint     string // 留空 = AWS 官方
+	usePathStyle bool
 }
 
 // NewUpload 初始化 AWS S3 Upload 实例（对齐 GCP NewUpload）
