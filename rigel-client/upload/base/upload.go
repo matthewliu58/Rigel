@@ -71,7 +71,7 @@ type DownloadFileInterface interface {
 }
 
 type UploadFileInterface interface {
-	UploadFile(ctx context.Context, objectName string, hops string, rateLimiter *rate.Limiter,
+	UploadFile(ctx context.Context, objectName string, contentLength int64, hops string, rateLimiter *rate.Limiter,
 		reader io.ReadCloser, inMemory bool, pre string, logger *slog.Logger) error
 }
 

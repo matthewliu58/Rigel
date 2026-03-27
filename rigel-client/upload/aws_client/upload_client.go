@@ -59,6 +59,7 @@ func NewUpload(
 func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
+	contentLength int64,
 	hops string,               // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
 	rateLimiter *rate.Limiter, // 兼容 GCP 入参（如需限流可启用）
 	reader io.ReadCloser,
@@ -66,6 +67,7 @@ func (u *Upload) UploadFile(
 	pre string,    // 日志前缀（关键追溯字段）
 	logger *slog.Logger,
 ) error {
+
 	logger.Info("UploadToS3byClient", slog.String("pre", pre))
 
 	// 上传开始前检查 ctx 是否已取消（对齐 GCP 逻辑）
@@ -147,10 +149,11 @@ func (u *Upload) UploadFile(
 
 	// 构建 S3 上传请求（对齐 GCP 的 StorageClass/ContentType）
 	putInput := &s3.PutObjectInput{
-		Bucket:      aws.String(u.bucketName),
-		Key:         aws.String(objectName),
-		Body:        uploadBody,
-		ContentType: aws.String("application/octet-stream"), // 和 GCP 一致
+		Bucket:        aws.String(u.bucketName),
+		Key:           aws.String(objectName),
+		Body:          uploadBody,
+		ContentType:   aws.String("application/octet-stream"), // 和 GCP 一致
+		ContentLength: aws.Int64(contentLength),
 		//StorageClass: types.StorageClassStandard,
 	}
 

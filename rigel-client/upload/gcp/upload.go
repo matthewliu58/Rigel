@@ -45,6 +45,7 @@ func NewUpload(
 func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
+	contentLength int64,
 	hops string,
 	rateLimiter *rate.Limiter,
 	reader io.ReadCloser,

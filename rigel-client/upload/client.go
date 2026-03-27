@@ -94,7 +94,7 @@ func DirectImp(fo base.FileOperateInterfaces, task ChunkTask, hops string,
 		logger.Error("UploadFile is nil", slog.String("pre", pre))
 		return fmt.Errorf("%w: UploadFile is nil", ErrInterfaceNotImplemented)
 	}
-	err = fo.UploadFile.UploadFile(ctx, task.ObjectName, hops, rateLimiter, reader, inMemory, pre, logger)
+	err = fo.UploadFile.UploadFile(ctx, task.ObjectName, length, hops, rateLimiter, reader, inMemory, pre, logger)
 	if err != nil {
 		logger.Error("UploadFile failed", slog.String("pre", pre),
 			slog.String("index", task.Index), slog.Any("err", err))
