@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"golang.org/x/time/rate"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,11 +15,10 @@ import (
 	"rigel-client/util"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
-// =====================
-// 核心常量（AWS 签名相关）
-// =====================
 const (
 	awsService     = "s3"
 	awsAlgorithm   = "AWS4-HMAC-SHA256"
@@ -61,11 +59,6 @@ func NewUpload(
 	return u
 }
 
-// UploadFile AWS S3 上传（对齐 GCP UploadFile 接口）
-// 功能：
-// 1. inMemory=true → 从内存 Reader 上传
-// 2. inMemory=false → 从本地文件上传
-// 3. 支持限流、Proxy 转发、AWS 签名认证
 func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
@@ -105,7 +98,7 @@ func (u *Upload) UploadFile(
 		// 外部传入的 reader 由调用方关闭
 	}()
 
-	// ---------------------- 2. 选择上传源：内存流 / 本地文件 ----------------------
+	//选择上传源：内存流 / 本地文件
 	if !inMemory {
 		// 模式1：inMemory=false → 从本地文件读取
 		localFilePath := filepath.Join(u.localBaseDir, objectName)
@@ -137,11 +130,11 @@ func (u *Upload) UploadFile(
 		logger.Info("use in-memory reader for upload", slog.String("pre", pre))
 	}
 
-	// ---------------------- 3. 限流包装Reader ----------------------
+	//限流包装Reader
 	rateLimitedBody := limit_rate.NewRateLimitedReader(ctx, proxyReader, rateLimiter)
 	logger.Info("rate limiter applied to reader", slog.String("pre", pre))
 
-	// ---------------------- 4. 解析hops并构造URL ----------------------
+	// 解析hops并构造URL
 	hopList := strings.Split(hops, ",")
 	if len(hopList) == 0 {
 		err := fmt.Errorf("invalid X-Hops: %s (split empty)", hops)
@@ -162,7 +155,7 @@ func (u *Upload) UploadFile(
 		slog.String("url", url),
 		slog.String("firstHop", firstHop))
 
-	// ---------------------- 5. 生成 AWS 签名（替代 GCP Token） ----------------------
+	// 生成 AWS 签名（替代 GCP Token）
 	logger.Info("start to generate AWS signature", slog.String("pre", pre))
 	// 获取当前时间（AWS 签名需要）
 	now := time.Now().UTC()
@@ -189,7 +182,7 @@ func (u *Upload) UploadFile(
 		awsAlgorithm, u.accessKey, dateStamp, u.region, awsService, signature)
 	logger.Info("AWS signature generated successfully", slog.String("pre", pre))
 
-	// ---------------------- 6. 构造并发送HTTP请求 ----------------------
+	// 构造并发送HTTP请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, rateLimitedBody)
 	if err != nil {
 		logger.Error("Create HTTP request failed",
@@ -226,7 +219,7 @@ func (u *Upload) UploadFile(
 	}
 	defer resp.Body.Close() // 确保响应体关闭
 
-	// ---------------------- 7. 校验响应状态 ----------------------
+	// 校验响应状态
 	if resp.StatusCode >= 300 {
 		respBody, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {

@@ -97,7 +97,7 @@ func RedirectImp(fo base.FileOperateInterfaces, task ChunkTask, hops string,
 			slog.String("index", task.Index), slog.Time("time", time.Now()))
 	}
 
-	// 新状态前最后检查ctx（防止更新过程中取消）
+	// 新状态前最后检查
 	select {
 	case <-ctx.Done():
 		finalErr = fmt.Errorf("ctx canceled before update success state: %w", ctx.Err())

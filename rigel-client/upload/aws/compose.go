@@ -46,10 +46,6 @@ func NewCompose(
 	return c
 }
 
-// ComposeFile AWS S3 分片合成（对齐 GCP ComposeFile 接口）
-// 功能：
-// 1. 单文件：复制并重命名，删除源文件
-// 2. 多文件：树形分组合成（每次最多1000个分片，S3限制），清理临时文件
 func (c *Compose) ComposeFile(
 	ctx context.Context,
 	objectName string, // 最终合成的文件名
@@ -140,9 +136,6 @@ func (c *Compose) ComposeFile(
 		return nil
 	}
 
-	// 2. 多文件场景：树形分组合成（对齐 GCP 逻辑）
-	// S3 单次 PutObject 不支持直接合成多文件，采用「下载分片→合并→上传」的兼容方案
-	// 注：S3 原生的 Multipart Upload 合成需要先初始化上传，此处为兼容 GCP 逻辑的通用方案
 	current := parts
 	level := 0
 	var tempObjects []string // 记录临时合成文件

@@ -192,10 +192,6 @@ func (d *Download) DownloadFile(
 	return localFileReader, nil
 }
 
-// =====================
-// 内部工具函数
-// =====================
-
 // initS3Client 初始化 S3 客户端（带超时配置）
 func (u *Download) initS3Client(ctx context.Context) (*s3.Client, error) {
 	httpClient := &http.Client{
@@ -248,7 +244,6 @@ func (u *Download) initS3Client(ctx context.Context) (*s3.Client, error) {
 	}), nil
 }
 
-// ========== 关键修正：结构体字段名和类型对齐 ==========
 // s3ReaderWrapper 封装 S3 响应体 ReadCloser + 资源清理逻辑（内存模式用）
 type s3ReaderWrapper struct {
 	io.ReadCloser            // 正确：resp.Body 是 io.ReadCloser 类型

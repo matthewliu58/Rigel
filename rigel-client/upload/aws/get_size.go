@@ -15,9 +15,6 @@ import (
 	"github.com/aws/smithy-go"
 )
 
-// =====================
-// 核心结构体（对齐 GCP GetSize）
-// =====================
 type GetSize struct {
 	bucketName   string // S3 存储桶名称
 	region       string // AWS 区域
@@ -113,10 +110,6 @@ func (g *GetSize) GetFileSize(ctx context.Context, filename string, pre string, 
 	// 7. 返回文件大小（字节）
 	return *fileSize, nil
 }
-
-// =====================
-// 内部工具函数
-// =====================
 
 // initS3Client 初始化 S3 客户端（带超时配置）
 func (u *GetSize) initS3Client(ctx context.Context) (*s3.Client, error) {
