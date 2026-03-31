@@ -20,9 +20,7 @@ import (
 )
 
 const (
-	awsService     = "s3"
-	awsAlgorithm   = "AWS4-HMAC-SHA256"
-	awsContentType = "application/octet-stream"
+	awsService = "s3"
 )
 
 type Upload struct {
@@ -167,7 +165,7 @@ func (u *Upload) UploadFile(
 	canonicalRequest := fmt.Sprintf("POST\n/%s/%s\n\nhost:%s\nx-amz-date:%s\n\nhost;x-amz-date\nUNSIGNED-PAYLOAD",
 		u.bucketName, objectName, firstHop, amzDate)
 	stringToSign := fmt.Sprintf("%s\n%s\n%s/%s/%s/aws4_request\n%s",
-		awsAlgorithm, amzDate, dateStamp, u.region, awsService,
+		"AWS4-HMAC-SHA256", amzDate, dateStamp, u.region, awsService,
 		sha256Hex(canonicalRequest))
 
 	// 计算签名
@@ -177,7 +175,7 @@ func (u *Upload) UploadFile(
 
 	// 构造 Authorization 头
 	authHeader := fmt.Sprintf("%s Credential=%s/%s/%s/%s/aws4_request, SignedHeaders=host;x-amz-date, Signature=%s",
-		awsAlgorithm, u.accessKey, dateStamp, u.region, awsService, signature)
+		"AWS4-HMAC-SHA256", u.accessKey, dateStamp, u.region, awsService, signature)
 	logger.Info("AWS signature generated successfully", slog.String("pre", pre))
 
 	// 构造并发送HTTP请求
@@ -191,7 +189,7 @@ func (u *Upload) UploadFile(
 
 	// 设置请求头
 	req.Header.Set("Authorization", authHeader)
-	req.Header.Set("Content-Type", awsContentType)
+	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("X-Amz-Date", amzDate)
 	// 保留和 GCP 一致的业务头
 	req.Header.Set(util.HeaderXHops, hops)

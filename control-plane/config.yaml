@@ -1,14 +1,12 @@
 # config-.yaml
+port: "8081"
 envoy_path_base: "/root"
 envoy_path: "/root/envoy"       # Envoy 可执行文件路径
 envoy_log: "/root/envoy.log"       # Envoy 日志文件路径
 envoy_config: "/root/envoy-mini.yaml"
 server_list:                             # Etcd 集群所有节点
-  - "192.248.182.214"
-  - "67.219.110.25"
-  - "144.202.107.74"
-  - "149.28.139.53"
-server_ip: "149.28.139.53"                    # 当前节点 IP
+  - "202.182.99.30"
+server_ip: "202.182.99.30"                    # 当前节点 IP
 data_dir: "/root/etcd"                # Etcd 数据目录
 #name: "etcd-1"                            # 当前节点名字
 
@@ -27,15 +25,15 @@ scaling:
 node:
   provider: "vultr"        # gcp | aws | azure | vultr | digitalocean | onprem
   continent: "asia"      # ONLY field used for bandwidth / cost query
-  country: "singapore"          # 可选，用于日志/解释/未来扩展
-  city: "singapore"          # 可选，用于日志/解释/未来扩展
+  country: "japan"          # 可选，用于日志/解释/未来扩展
+  city: "tokyo"          # 可选，用于日志/解释/未来扩展
   ip:
     private: "0.0.0.0"  # 内网 IP
-    public: "149.28.139.53" # 公网 IP 作为hostname
+    public: "202.182.99.30" # 公网 IP 作为hostname
 
 proxy:
   ips:
-    - "149.28.139.53"
+    - "202.182.99.30"
 
 # scaling的config代替
 #gcp:

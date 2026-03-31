@@ -1,17 +1,10 @@
 [
   {
-    "provider": "gcp",
-    "ip": "203.141.128.1",
+    "provider": "vultr",
+    "ip": "76.223.1.167",
     "port": 80,
     "region": "asia",
-    "id": "tokyo"
-  },
-  {
-    "provider": "aws",
-    "ip": "46.243.122.48",
-    "port": 80,
-    "region": "europe",
-    "id": "germany"
+    "id": "singapore"
   }
 ]
 
