@@ -31,7 +31,7 @@ type Upload struct {
 func NewUpload(
 	localBaseDir, bucketName, region, accessKey, secretKey, endpoint string,
 	usePathStyle bool,
-	pre string, // 日志前缀（和 GCP 保持一致）
+	pre string,          // 日志前缀（和 GCP 保持一致）
 	logger *slog.Logger, // 日志实例
 ) *Upload {
 	u := &Upload{
@@ -52,17 +52,16 @@ func (u *Upload) UploadFile(
 	ctx context.Context,
 	objectName string,
 	contentLength int64,
-	hops string, // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
+	hops string,               // 兼容 GCP 入参（预留，AWS 客户端模式无需使用）
 	rateLimiter *rate.Limiter, // 兼容 GCP 入参（如需限流可启用）
 	reader io.ReadCloser,
 	inMemory bool, // true=内存模式，false=文件模式
-	pre string, // 日志前缀（关键追溯字段）
+	pre string,    // 日志前缀（关键追溯字段）
 	logger *slog.Logger,
 ) error {
 
 	logger.Info("UploadToS3byClient", slog.String("pre", pre))
 
-	// 上传开始前检查 ctx 是否已取消（对齐 GCP 逻辑）
 	select {
 	case <-ctx.Done():
 		err := fmt.Errorf("upload canceled before start: %w", ctx.Err())
@@ -71,7 +70,6 @@ func (u *Upload) UploadFile(
 	default:
 	}
 
-	// 日志区分上传模式（添加 pre 前缀，和 GCP 格式一致）
 	if inMemory {
 		logger.Info("Uploading data to S3 (in-memory mode, no local file)",
 			slog.String("pre", pre),
@@ -93,11 +91,10 @@ func (u *Upload) UploadFile(
 		return fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
-	// 定义上传体（根据模式选择）
 	var uploadBody io.Reader
 	//var localFile *os.File // 文件模式下的本地文件句柄
 
-	// ---------------------- 模式1：inMemory=true → 内存流式上传 ----------------------
+	// inMemory=true → 内存流式上传
 	if inMemory {
 		if reader == nil {
 			err := fmt.Errorf("in-memory mode requires non-nil dataReader")
@@ -113,7 +110,7 @@ func (u *Upload) UploadFile(
 			uploadBody = reader
 		}
 
-		// ---------------------- 模式2：inMemory=false → 本地文件上传 ----------------------
+		// inMemory=false → 本地文件上传
 	} else {
 		localFilePath := filepath.Join(u.localBaseDir, objectName)
 		// 打开本地文件（对齐 GCP 的错误日志格式）
@@ -136,7 +133,7 @@ func (u *Upload) UploadFile(
 		}
 	}
 
-	// 构建 S3 上传请求（对齐 GCP 的 StorageClass/ContentType）
+	// 构建 S3 上传请求
 	putInput := &s3.PutObjectInput{
 		Bucket:        aws.String(u.bucketName),
 		Key:           aws.String(objectName),
@@ -157,7 +154,6 @@ func (u *Upload) UploadFile(
 		return fmt.Errorf("failed to upload to S3 bucket: %w", err)
 	}
 
-	// 上传成功日志（区分模式，和 GCP 格式一致）
 	if inMemory {
 		logger.Info("In-memory upload success",
 			slog.String("pre", pre),

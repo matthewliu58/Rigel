@@ -25,9 +25,6 @@ const (
 	awsContentType = "application/octet-stream"
 )
 
-// =====================
-// 核心结构体（对齐 GCP Upload）
-// =====================
 type Upload struct {
 	localBaseDir string // 本地基础目录（文件模式用）
 	bucketName   string // S3 存储桶名称
@@ -38,7 +35,7 @@ type Upload struct {
 	usePathStyle bool
 }
 
-// NewUpload 初始化 AWS S3 Upload 实例（对齐 GCP NewUpload）
+// NewUpload 初始化 AWS S3 Upload 实例
 func NewUpload(
 	localBaseDir, bucketName, region, accessKey, secretKey, endpoint string,
 	usePathStyle bool,
@@ -70,6 +67,7 @@ func (u *Upload) UploadFile(
 	pre string,
 	logger *slog.Logger,
 ) error {
+
 	logger.Info("UploadToS3byProxy start", slog.String("pre", pre))
 
 	// 校验 hops 非空
@@ -156,7 +154,7 @@ func (u *Upload) UploadFile(
 		slog.String("firstHop", firstHop))
 
 	// 生成 AWS 签名（替代 GCP Token）
-	logger.Info("start to generate AWS signature", slog.String("pre", pre))
+	logger.Info("start to generate s3 signature", slog.String("pre", pre))
 	// 获取当前时间（AWS 签名需要）
 	now := time.Now().UTC()
 	dateStamp := now.Format("20060102")
@@ -191,18 +189,18 @@ func (u *Upload) UploadFile(
 		return fmt.Errorf("new request: %w", err)
 	}
 
-	// 设置请求头（对齐 GCP 逻辑，替换为 AWS 相关头）
+	// 设置请求头
 	req.Header.Set("Authorization", authHeader)
 	req.Header.Set("Content-Type", awsContentType)
-	req.Header.Set("X-Amz-Date", amzDate) // AWS 必需头
+	req.Header.Set("X-Amz-Date", amzDate)
 	// 保留和 GCP 一致的业务头
 	req.Header.Set(util.HeaderXHops, hops)
 	req.Header.Set(util.HeaderXChunkIndex, "1")
 	req.Header.Set(util.HeaderXRateLimitEnable, "true")
-	req.Header.Set(util.HeaderDestType, util.AWSCloud) // 替换为 AWS 类型
+	req.Header.Set(util.HeaderDestType, util.S3Cloud)
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
-	// 发送请求（对齐 GCP 超时配置）
+	// 发送请求
 	client := &http.Client{Timeout: 5 * time.Minute}
 	logger.Info("Send HTTP request to proxy",
 		slog.String("pre", pre),

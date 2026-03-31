@@ -27,7 +27,7 @@ type Compose struct {
 	usePathStyle bool
 }
 
-// NewCompose 初始化 AWS S3 Compose 实例（对齐 GCP NewCompose）
+// NewCompose 初始化 AWS S3 Compose 实例
 func NewCompose(
 	bucket, region, accessKey, secretKey, endpoint string,
 	usePathStyle bool,
@@ -69,7 +69,7 @@ func (c *Compose) ComposeFile(
 		return fmt.Errorf("new s3 client failed: %w", err)
 	}
 
-	// 1. 单文件场景：复制+删除源文件（对齐 GCP 逻辑）
+	// 1. 单文件场景：复制+删除源文件
 	if len(parts) == 1 {
 		partName := parts[0]
 		// 同名无需操作

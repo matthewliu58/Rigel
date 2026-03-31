@@ -163,7 +163,7 @@ func (u *GetSize) initS3Client(ctx context.Context) (*s3.Client, error) {
 	}), nil
 }
 
-// formatBytes 将字节数转换为易读的字符串（完全复用 GCP 的实现）
+// formatBytes 将字节数转换为易读的字符串
 // 如：1024 → 1KB，1048576 → 1MB
 func formatBytes(bytes int64) string {
 	const unit = 1024

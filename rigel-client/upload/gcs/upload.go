@@ -184,7 +184,7 @@ func (u *Upload) UploadFile(
 	req.Header.Set(util.HeaderXHops, hops)
 	req.Header.Set(util.HeaderXChunkIndex, "1")
 	req.Header.Set(util.HeaderXRateLimitEnable, "true")
-	req.Header.Set(util.HeaderDestType, util.GCPCLoud)
+	req.Header.Set(util.HeaderDestType, util.GCSCLoud)
 	logger.Info("HTTP request headers set", slog.String("pre", pre))
 
 	// 发送请求

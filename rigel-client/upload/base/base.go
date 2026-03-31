@@ -88,7 +88,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 
 	// 第一步：初始化 读取/下载 相关接口（按Source.Type分支）
 	switch us.Source.Type {
-	case util.GCPCLoud:
+	case util.GCSCLoud:
 		gcp_ := ExtractGCPFromInterface(us.Source.Interface, pre, logger)
 		if gcp_ == nil {
 			return fo
@@ -96,7 +96,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		fo.GetFileSize = gcs.NewGetSize(gcp_.BucketName, gcp_.CredFile, pre, logger)
 		fo.DownloadFile = gcs.NewDownload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
 
-	case util.AWSCloud:
+	case util.S3Cloud:
 		aws_ := ExtractAWSFromInterface(us.Source.Interface, pre, logger)
 		if aws_ == nil {
 			logger.Error("Extract AWS Source Interface failed", slog.String("pre", pre))
@@ -127,7 +127,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 
 	// 第二步：初始化 上传/合并 相关接口（按Dest.Type分支）
 	switch us.Dest.Type {
-	case util.GCPCLoud:
+	case util.GCSCLoud:
 		gcp_ := ExtractGCPFromInterface(us.Dest.Interface, pre, logger)
 		if gcp_ == nil {
 			return fo
@@ -140,7 +140,7 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 			fo.ComposeFile = gcs.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
 		}
 
-	case util.AWSCloud:
+	case util.S3Cloud:
 		aws_ := ExtractAWSFromInterface(us.Dest.Interface, pre, logger)
 		if aws_ == nil {
 			logger.Error("Extract AWS Dest Interface failed", slog.String("pre", pre))
