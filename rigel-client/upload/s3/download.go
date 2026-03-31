@@ -52,12 +52,12 @@ func NewDownload(
 // DownloadFile AWS S3 文件下载（对齐 GCP DownloadFile 接口）
 func (d *Download) DownloadFile(
 	ctx context.Context,
-	filename string,    // S3 对象名
+	filename string, // S3 对象名
 	newFilename string, // 本地文件名（落盘模式用）
-	start int64,        // 分片起始字节
-	length int64,       // 分片长度（<=0 表示完整下载）
-	bs string,          // 兼容 GCP 入参（预留）
-	inMemory bool,      // true=内存模式，false=落盘模式
+	start int64, // 分片起始字节
+	length int64, // 分片长度（<=0 表示完整下载）
+	bs string, // 兼容 GCP 入参（预留）
+	inMemory bool, // true=内存模式，false=落盘模式
 	pre string,
 	logger *slog.Logger,
 ) (io.ReadCloser, error) { // 返回 io.ReadCloser（兼容两种模式）

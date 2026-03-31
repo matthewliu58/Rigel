@@ -5,13 +5,13 @@ import (
 	"golang.org/x/time/rate"
 	"io"
 	"log/slog"
-	"rigel-client/upload/client/gcs_client"
-	"rigel-client/upload/client/s3_client"
+	"rigel-client/upload/gcs"
+	"rigel-client/upload/gcs_client"
 	"rigel-client/upload/local"
-	gcs_ "rigel-client/upload/proxy/gcs"
-	s_ "rigel-client/upload/proxy/s3"
 	"rigel-client/upload/remote"
 	"rigel-client/upload/remote_client"
+	"rigel-client/upload/s3"
+	"rigel-client/upload/s3_client"
 	"rigel-client/util"
 )
 
@@ -93,8 +93,8 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		if gcp_ == nil {
 			return fo
 		}
-		fo.GetFileSize = gcs_.NewGetSize(gcp_.BucketName, gcp_.CredFile, pre, logger)
-		fo.DownloadFile = gcs_.NewDownload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
+		fo.GetFileSize = gcs.NewGetSize(gcp_.BucketName, gcp_.CredFile, pre, logger)
+		fo.DownloadFile = gcs.NewDownload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
 
 	case util.AWSCloud:
 		aws_ := ExtractAWSFromInterface(us.Source.Interface, pre, logger)
@@ -102,9 +102,9 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 			logger.Error("Extract AWS Source Interface failed", slog.String("pre", pre))
 			return fo
 		}
-		fo.GetFileSize = s_.NewGetSize(aws_.BucketName, aws_.Region,
+		fo.GetFileSize = s3.NewGetSize(aws_.BucketName, aws_.Region,
 			aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
-		fo.DownloadFile = s_.NewDownload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
+		fo.DownloadFile = s3.NewDownload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
 			aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 
 	case util.LocalDisk:
@@ -134,10 +134,10 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		}
 		if clientB {
 			fo.UploadFile = gcs_client.NewUpload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
-			fo.ComposeFile = gcs_.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
+			fo.ComposeFile = gcs.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
 		} else {
-			fo.UploadFile = gcs_.NewUpload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
-			fo.ComposeFile = gcs_.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
+			fo.UploadFile = gcs.NewUpload(us.Proxy.LocalDir, gcp_.BucketName, gcp_.CredFile, pre, logger)
+			fo.ComposeFile = gcs.NewCompose(gcp_.BucketName, gcp_.CredFile, pre, logger)
 		}
 
 	case util.AWSCloud:
@@ -149,12 +149,12 @@ func InitInterface(clientB bool, us UploadStruct, pre string, logger *slog.Logge
 		if clientB {
 			fo.UploadFile = s3_client.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
 				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
-			fo.ComposeFile = s_.NewCompose(aws_.BucketName, aws_.Region,
+			fo.ComposeFile = s3.NewCompose(aws_.BucketName, aws_.Region,
 				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 		} else {
-			fo.UploadFile = s_.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
+			fo.UploadFile = s3.NewUpload(us.Proxy.LocalDir, aws_.BucketName, aws_.Region,
 				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
-			fo.ComposeFile = s_.NewCompose(aws_.BucketName, aws_.Region,
+			fo.ComposeFile = s3.NewCompose(aws_.BucketName, aws_.Region,
 				aws_.AccessKey, aws_.SecretKey, aws_.Endpoint, aws_.UsePathStyle, pre, logger)
 		}
 

@@ -5,20 +5,17 @@ import (
 	"math"
 )
 
-// ----------------------- Priority Queue -----------------------
-// 原PQNode结构（保留，用于优先级队列）
+// Priority Queue
 type PQNode struct {
-	node string  // 仅存储当前节点，而非完整路径，优化内存
-	cost float64 // 当前节点到起点的成本
-	// 为了优先级队列排序，补充索引字段（container/heap要求）
+	node  string
+	cost  float64
 	index int
 }
 
-// 原PriorityQueue结构（补充完整，保证container/heap可正常工作）
 type PriorityQueue []*PQNode
 
 func (pq PriorityQueue) Len() int           { return len(pq) }
-func (pq PriorityQueue) Less(i, j int) bool { return pq[i].cost < pq[j].cost } // 最小堆，按成本升序排序
+func (pq PriorityQueue) Less(i, j int) bool { return pq[i].cost < pq[j].cost }
 func (pq PriorityQueue) Swap(i, j int) {
 	pq[i], pq[j] = pq[j], pq[i]
 	pq[i].index, pq[j].index = i, j
@@ -35,13 +32,13 @@ func (pq *PriorityQueue) Pop() interface{} {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil  // 避免内存泄漏
-	item.index = -1 // 标记为已弹出
+	old[n-1] = nil
+	item.index = -1
 	*pq = old[0 : n-1]
 	return item
 }
 
-// ----------------------- Dijkstra -----------------------
+// Dijkstra
 func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 
 	const (
@@ -50,7 +47,7 @@ func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 
 	edges := g.GetEdges()
 
-	// 1. 构建图和节点集合（原逻辑保留，无问题）
+	// 构建图和节点集合
 	graph := make(map[string][]*Edge)
 	nodes := make(map[string]struct{})
 	for _, e := range edges {
@@ -59,7 +56,7 @@ func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 		nodes[e.DestinationIp] = struct{}{}
 	}
 
-	// 2. 校验起点和终点是否存在（原逻辑保留，无问题）
+	// 校验起点和终点是否存在
 	if _, ok := nodes[start]; !ok {
 		return nil, math.Inf(1)
 	}
@@ -67,7 +64,7 @@ func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 		return nil, math.Inf(1)
 	}
 
-	// 3. 初始化距离映射和前驱节点映射（原逻辑保留，无问题）
+	// 初始化距离映射和前驱节点映射
 	dist := make(map[string]float64)
 	prev := make(map[string]string)
 	for node := range nodes {
@@ -75,7 +72,7 @@ func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 	}
 	dist[start] = 0
 
-	// 4. 初始化优先级队列（优化：仅存储节点和成本，而非完整路径）
+	// 初始化优先级队列
 	pq := &PriorityQueue{}
 	heap.Init(pq)
 	heap.Push(pq, &PQNode{
@@ -83,7 +80,7 @@ func (g *GraphManager) Dijkstra(start, end string) ([]string, float64) {
 		cost: 0,
 	})
 
-	// 5. 处理优先级队列（核心修改：添加节点成本校验）
+	// 处理优先级队列
 	for pq.Len() > 0 {
 		// 弹出当前成本最低的节点
 		u := heap.Pop(pq).(*PQNode)

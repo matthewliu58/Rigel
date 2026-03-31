@@ -31,15 +31,15 @@ func ComputeAdmissionRate(
 		slog.Any("task", task), slog.Any("cost", cost),
 		slog.Any("alpha", alpha), slog.Any("V", V))
 
-	// Step 1: compute path cost C_k^*(t)
+	// compute path cost C_k^*(t)
 	var pathCost float64 = cost
 
-	// Numerical safety
+	// numerical safety
 	if pathCost <= 0 {
 		return 0
 	}
 
-	// Step 2: closed-form optimal rate
+	// closed-form optimal rate
 	rawRate := math.Pow(
 		V*task.WeightU/pathCost,
 		1.0/alpha,
@@ -47,7 +47,7 @@ func ComputeAdmissionRate(
 
 	logger.Info("ComputeAdmissionRate", slog.String("pre", pre), slog.Any("rawRate", rawRate))
 
-	// Step 3: projection to a feasible region
+	// projection to a feasible region
 	if rawRate < task.MinRate {
 		return task.MinRate
 	}

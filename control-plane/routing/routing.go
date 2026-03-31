@@ -122,6 +122,7 @@ func (g *GraphManager) Routing(endPoints EndPoints, pre string, logger *slog.Log
 	rate := ComputeAdmissionRate(Task{WeightU: 1, MinRate: 10, MaxRate: 20}, minCost, 1.0, 100, pre, g.logger)
 	paths = append(paths, PathInfo{Hops: merged, Rate: int64(rate)})
 	rout := RoutingInfo{Routing: paths}
+
 	logger.Info("routing result", slog.String("pre", pre), slog.Any("rout", rout))
 	return rout
 }

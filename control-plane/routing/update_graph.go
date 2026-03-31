@@ -9,9 +9,6 @@ import (
 	"sync"
 )
 
-//定时器维护 更新 路由map 供选路使用
-
-// Edge 表示两个节点之间的边（逻辑或物理）
 type Edge struct {
 	SourceIp             string  `json:"source_ip"`             // A 节点名/ID
 	DestinationIp        string  `json:"destination_ip"`        // B 节点名/ID
@@ -27,22 +24,18 @@ type Edge struct {
 	mu sync.RWMutex // 保护动态字段（BandwidthPrice, Latency, CacheUsageRatio, EdgeWeight）
 }
 
-// UpdateWeight 安全更新 EdgeWeight
 func (e *Edge) UpdateWeight(newWeight float64) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.EdgeWeight = newWeight
 }
 
-// Weight 安全读取 EdgeWeight
 func (e *Edge) Weight() float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.EdgeWeight
 }
 
-// ----------------------- GraphManager -----------------------
-// 全局图管理器，维护 edges 和节点
 type GraphManager struct {
 	mu     sync.RWMutex
 	edges  map[string]*Edge                     // key: "source->destination"
@@ -67,7 +60,6 @@ func (g *GraphManager) GetNode(id string) (*storage.NetworkTelemetry, bool) {
 	return node, ok
 }
 
-// GetNodes 返回图中所有节点的指针切片
 func (g *GraphManager) GetNodes() []*storage.NetworkTelemetry {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -80,7 +72,6 @@ func (g *GraphManager) GetNodes() []*storage.NetworkTelemetry {
 	return nodes
 }
 
-// RemoveNode 删除节点及其相关的所有边
 func (g *GraphManager) RemoveNode(id, logPre string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -96,7 +87,6 @@ func (g *GraphManager) RemoveNode(id, logPre string) {
 	}
 }
 
-// GetEdges 返回当前所有 edges
 func (g *GraphManager) GetEdges() []*Edge {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -125,8 +115,6 @@ func OutNode(n string) string {
 	return n + "-2"
 }
 
-// InitGraph 初始化节点和对应的虚拟边 & inter-node 边
-// AddNodeWithEdges 将节点加入 GraphManager，并同时生成虚拟边和 inter-node 边
 func (g *GraphManager) AddNode(node *storage.NetworkTelemetry, logPre string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -247,62 +235,83 @@ func (g *GraphManager) DumpGraph(logPre string) {
 }
 
 // EdgeRisk computes the unified risk score for both virtual and physical edges.
-//
-// Inputs:
-//
-//	cacheUtil - average cache utilization (0~1), only meaningful for virtual edges
-//	cost      - monetary / bandwidth cost, only meaningful for physical edges
-//	lossRate  - packet loss rate (0~1), only meaningful for physical edges
-//
-// Convention:
-//   - For virtual edges: cost = 0, lossRate = 0
-//   - For physical edges: cacheUtil = 0
-//
-// Output:
-//
-//	A non-negative additive risk score (lower is better).
 func EdgeRisk(cacheUtil, cost, lossRate float64, pre string, l *slog.Logger) float64 {
-	// -----------------------------
-	// Policy constants (system values)
-	// -----------------------------
 
-	l.Info("EdgeRisk", slog.String("pre", pre), slog.Any("cacheUtil", cacheUtil),
-		slog.Any("cost", cost), slog.Any("lossRate", lossRate))
+	l.Info("EdgeRisk", slog.String("pre", pre), slog.Float64("cacheUtil", cacheUtil),
+		slog.Float64("cost", cost), slog.Float64("lossRate", lossRate))
 
 	const (
-		cacheThreshold = 0.6 // Cache policy
-		cacheScale     = 0.4
-		costBaseline   = 0.2 // Cost policy
-		wCache         = 0.5 // Weights (value priorities)
-		wCost          = 0.4
-		wLoss          = 0.1
+		// -------- 缓存配置 --------
+		cacheThreshold = 0.6
+		cacheMax       = 1.0
+
+		// -------- 成本配置 --------
+		costMax = 0.15
+
+		// -------- 丢包敏感配置 --------
+		lossInflection = 0.05
+		lossSharpness  = 40.0
+
+		// -------- 核心权重 --------
+		wCoreCache = 0.5
+		wCoreLoss  = 0.5
+
+		// -------- 成本偏好 --------
+		baseCostPref    = 0.4 // 基础成本权重
+		maxCostPref     = 0.6 // 网络极好时，最大成本权重
+		healthThreshold = 0.2 // coreRisk < 0.2 = 网络很健康
 	)
 
+	// 缓存风险
 	var cacheRisk float64
 	if cacheUtil > cacheThreshold {
-		cacheRisk = math.Log(1 + (cacheUtil-cacheThreshold)/cacheScale)
+		excess := cacheUtil - cacheThreshold
+		maxExcess := cacheMax - cacheThreshold
+		cacheRisk = math.Pow(excess/maxExcess, 1.5)
 	}
 
+	// 成本风险
 	var costRisk float64
 	if cost > 0 {
-		costRisk = math.Log(1 + cost/costBaseline)
+		costRisk = cost / costMax
+		if costRisk > 1.0 {
+			costRisk = 1.0
+		}
 	}
 
+	// 丢包风险
 	var lossRisk float64
 	if lossRate > 0 {
 		if lossRate >= 1.0 {
-			return math.Inf(1)
+			return 1.0
 		}
-		lossRisk = -math.Log(1 - lossRate)
+		x := lossSharpness * (lossRate - lossInflection)
+		lossRisk = 1.0 / (1.0 + math.Exp(-x))
 	}
 
-	r := wCache*cacheRisk + wCost*costRisk + wLoss*lossRisk
+	// 系统风险（缓存+丢包 对等权重）
+	coreSurvival := (1 - wCoreCache*cacheRisk) * (1 - wCoreLoss*lossRisk)
+	coreRisk := 1 - coreSurvival
 
-	l.Info("EdgeRisk", slog.String("pre", pre),
-		slog.Float64("cacheRisk", cacheRisk),
-		slog.Float64("costRisk", costRisk),
-		slog.Float64("lossRisk", lossRisk),
-		slog.Float64("risk", r))
+	// 成本权重
+	var wCost float64
+	if coreRisk <= healthThreshold {
+		// 网络很健康 → 提高成本权重（最多到 maxCostPref）
+		health := 1 - (coreRisk / healthThreshold)
+		wCost = baseCostPref + (maxCostPref-baseCostPref)*health
+	} else {
+		// 网络一般/差 → 用基础权重，钱不重要
+		wCost = baseCostPref
+	}
 
-	return r
+	totalRisk := coreRisk + (1.0-coreRisk)*wCost*costRisk
+	if totalRisk > 1.0 {
+		totalRisk = 1.0
+	}
+
+	l.Info("EdgeRisk 最终结果", slog.String("pre", pre), slog.Float64("cacheRisk", cacheRisk),
+		slog.Float64("lossRisk", lossRisk), slog.Float64("coreRisk", coreRisk),
+		slog.Float64("wCost(实际成本权重)", wCost), slog.Float64("totalRisk", totalRisk))
+
+	return totalRisk
 }
