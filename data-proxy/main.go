@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"data-proxy/config"
 	"data-proxy/congestion"
+	"data-proxy/health"
 	"data-proxy/util"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -29,7 +30,6 @@ const (
 	RemoteDisk      = "remote-disk"
 	DefaultIndex    = "1"
 	ServerErrorCode = 503
-	BufferSize      = 64
 )
 
 // 自定义Handler：修复slog.Context为context.Context，兼容所有Go 1.21+版本
@@ -109,8 +109,8 @@ func getClient(target string, scheme string) *http.Client {
 		MaxIdleConns:        50,
 		MaxIdleConnsPerHost: 50,
 		IdleConnTimeout:     10 * time.Second,
-		ReadBufferSize:      BufferSize * 1024,
-		WriteBufferSize:     BufferSize * 1024,
+		ReadBufferSize:      congestion.BufferSize * 1024,
+		WriteBufferSize:     congestion.BufferSize * 1024,
 	}
 
 	if scheme == "https" {
@@ -234,63 +234,6 @@ func handler(logger *slog.Logger) http.HandlerFunc {
 	}
 }
 
-// HealthStateChange 修改健康状态开关 /healthStateChange?set=on/off
-func HealthStateChange(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		pre := util.GenerateRandomLetters(5)
-		logger.Info("healthStateChange", slog.String("pre", pre))
-
-		// 获取参数
-		set := c.DefaultQuery("set", "on")
-		logger.Info("get switch val", slog.String("pre", pre), slog.String("set", set))
-
-		// 加锁修改状态
-		statusLock.Lock()
-		defer statusLock.Unlock()
-
-		if set == "off" {
-			status = "off"
-		} else {
-			status = "on"
-		}
-
-		c.JSON(http.StatusOK, "success")
-	}
-}
-
-// Health 健康检查 /health
-func Health(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		pre := util.GenerateRandomLetters(5)
-
-		// 读锁也可以，我保持你原来的写法不动
-		statusLock.Lock()
-		defer statusLock.Unlock()
-
-		logger.Info("health", slog.String("pre", pre), slog.String("status", status))
-
-		if status == "off" {
-			c.JSON(http.StatusInternalServerError, "error")
-			return
-		}
-		c.JSON(http.StatusOK, "success")
-	}
-}
-
-// GetCongestionInfo 获取拥堵状态 /getCongestionInfo
-func GetCongestionInfo(logger *slog.Logger) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		info := congestion.CheckCongestion(2*BufferSize, logger)
-		c.JSON(http.StatusOK, info)
-	}
-}
-
-var (
-	// 锁和状态变量
-	statusLock sync.Mutex
-	status     string = "on" // 默认状态为 "on"
-)
-
 func main() {
 	logDir := "log"
 	_ = os.MkdirAll(logDir, 0755)
@@ -329,9 +272,9 @@ func main() {
 	logger.Info("set memory limit", slog.String("pre", pre), "mem", mem, "current_limit", currentLimit)
 
 	router := gin.Default()
-	router.GET("/healthStateChange", HealthStateChange(logger))
-	router.GET("/health", Health(logger))
-	router.GET("/getCongestionInfo", GetCongestionInfo(logger))
+	router.GET("/healthStateChange", health.HealthStateChange(logger))
+	router.GET("/health", health.Health(logger))
+	router.GET("/getCongestionInfo", congestion.GetCongestionInfo(logger))
 	router.NoRoute(func(c *gin.Context) { handler(logger)(c.Writer, c.Request) })
 
 	port := "8095"

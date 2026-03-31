@@ -2,13 +2,16 @@ package congestion
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"log/slog"
+	"net/http"
 	"runtime"
 	"runtime/debug"
 	"sync/atomic"
 )
 
 const (
+	BufferSize            = 64
 	WarningLevelforBuffer = 0.6
 	//CriticalLevelforBuffer = 0.8
 )
@@ -105,4 +108,12 @@ func getTotalMem(logger *slog.Logger) (int64, error) {
 	//}
 	//
 	//return 0, os.ErrNotExist
+}
+
+// GetCongestionInfo 获取拥堵状态 /getCongestionInfo
+func GetCongestionInfo(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		info := CheckCongestion(2*BufferSize, logger)
+		c.JSON(http.StatusOK, info)
+	}
 }
