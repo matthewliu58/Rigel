@@ -155,17 +155,6 @@ func extractPartNumber(s string) int {
 	return num
 }
 
-// DeleteFilesInDir 删除指定目录下的指定文件
-// 参数说明：
-//
-//	dir: 目标目录路径（绝对路径/相对路径均可）
-//	fileNames: 需要删除的文件名数组（仅需文件名，无需路径）
-//	pre: 日志前缀（用于追踪请求/业务标识）
-//	logger: slog日志实例（用于标准化日志输出）
-//
-// 返回值：
-//
-//	error: 整体错误（目录不存在/权限问题等），单个文件删除失败会记录警告但不中断整体流程
 func DeleteFilesInDir(dir string, fileNames []string, pre string, logger *slog.Logger) error {
 	// 1. 基础参数校验
 	if dir == "" {
