@@ -219,8 +219,6 @@ func (g *GraphManager) AddNode(node *storage.NetworkTelemetry, logPre string) {
 		}
 		//g.logger.Info("EdgeRisk", slog.String("pre", logPre), OutNode(id)+"->"+in, r)
 	}
-
-	return
 }
 
 func (g *GraphManager) DumpGraph(logPre string) {

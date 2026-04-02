@@ -49,5 +49,4 @@ func (s *Scaler) ManualScaling(pre, action, ip, vmName string) {
 	s.logger.Info("ManualScaling state change", slog.String("pre", pre),
 		slog.String("old state", s.ManualAction), slog.String("new state", action))
 	s.ManualAction = action
-	return
 }

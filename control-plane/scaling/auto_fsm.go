@@ -296,7 +296,7 @@ func (s *Scaler) triggerRelease(vm_ VM, pre string) bool {
 	}
 
 	//update envoy 配置
-	if _, err := sendAddTargetIpsRequest([]em.EnvoyTargetAddr{{vm.PublicIP, 8095}},
+	if _, err := sendAddTargetIpsRequest([]em.EnvoyTargetAddr{{IP: vm.PublicIP, Port: 8095}},
 		ActionDelVM, pre, logger); err != nil {
 
 		s.logger.Error("SendAddTargetIpsRequest failed", slog.String("pre", pre),
@@ -336,6 +336,7 @@ func (s *Scaler) calculateRetention(pre string) (time.Time, NodeStatus) {
 
 	// 计算 Retention 时间长度
 	retDur := baseRe + time.Duration(reAmpl*activePotent)
+	s.logger.Info("CalculateRetention", slog.String("pre", pre), slog.Any("retDur", retDur))
 
 	// 如果超过永久阈值，直接返回永久时间
 	if retDur >= perThr {
@@ -502,7 +503,7 @@ func (s *Scaler) deployAndAttachVM(vm VM, pre string, logger *slog.Logger) error
 			slog.String("binaryPlane", binaryPlane), slog.Any("VM", vm))
 	}
 
-	if _, err := sendAddTargetIpsRequest([]em.EnvoyTargetAddr{{vm.PublicIP, 8095}}, ActionAddVM, pre, logger); err != nil {
+	if _, err := sendAddTargetIpsRequest([]em.EnvoyTargetAddr{{IP: vm.PublicIP, Port: 8095}}, ActionAddVM, pre, logger); err != nil {
 		s.logger.Error("SendAddTargetIpsRequest failed", slog.String("pre", pre),
 			slog.Any("VM", vm), slog.Any("err", err))
 		return err
