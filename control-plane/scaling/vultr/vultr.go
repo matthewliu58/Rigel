@@ -20,215 +20,19 @@ const (
 )
 
 type Config struct {
-	APIKey string `json:"apiKey"` // Vultr API密钥
-	Region string `json:"region"` // 机房区域（如 "ewr"）
-	//Plan   string `json:"plan"`   // 实例规格（如 "vc2-1c-2gb"）
-	//SSHKeys string `json:"sshKeys"` // SSH密钥ID列表（逗号分隔）
+	APIKey string `json:"apiKey"` // Vultr API
+	Region string `json:"region"` // "ewr"
+	//Plan   string `json:"plan"`   // "vc2-1c-2gb"
+	//SSHKeys string `json:"sshKeys"`
 }
 
 type ScalingOperate struct {
-	apiKey  string   // Vultr API密钥
-	region  string   // 区域
-	plan    string   // 实例规格
-	sshKeys []string // SSH密钥ID列表
-	osID    int      // 操作系统ID
+	apiKey  string   // Vultr API
+	region  string   // region
+	plan    string   // specification
+	sshKeys []string //
+	osID    int      // os
 	timeout time.Duration
-}
-
-func (vc *ScalingOperate) CreateVM(ctx context.Context, vmName string, pre string, logger *slog.Logger) (string, error) {
-
-	reqBody := createInstanceReq{
-		Region:   vc.region,
-		Plan:     vc.plan,
-		OsID:     vc.osID,
-		Label:    vmName,
-		Hostname: vmName,
-		SSHKeys:  vc.sshKeys,
-	}
-
-	data, err := json.Marshal(reqBody)
-	if err != nil {
-		logger.Error("序列化创建VM请求体失败", slog.String("pre", pre), slog.String("vmName", vmName), "error", err)
-		return "", err
-	}
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		VultrAPIBase+"/instances",
-		bytes.NewReader(data),
-	)
-	if err != nil {
-		logger.Error("创建Vultr VM请求失败", slog.String("pre", pre), slog.String("vmName", vmName), "error", err)
-		return "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: vc.timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error("发送Vultr VM创建请求失败", slog.String("pre", pre), slog.String("vmName", vmName), "error", err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		err := fmt.Errorf("创建Vultr VM失败: %s", body)
-		logger.Error("Vultr VM创建失败", slog.String("pre", pre), slog.String("vmName", vmName), "error", err)
-		return "", err
-	}
-
-	var result createInstanceResp
-	if err := json.Unmarshal(body, &result); err != nil {
-		logger.Error("解析Vultr创建VM响应失败", slog.String("pre", pre), slog.String("vmName", vmName), "error", err)
-		return "", err
-	}
-
-	logger.Info("Vultr VM创建成功", slog.String("pre", pre),
-		slog.String("vmName", vmName), slog.String("instanceID", result.Instance.ID))
-
-	return result.Instance.ID, nil
-}
-
-func (vc *ScalingOperate) GetVMPublicIP(
-	ctx context.Context,
-	vmName string,
-	pre string,
-	logger *slog.Logger,
-) (string, error) {
-
-	// Vultr API通过instanceID查询，因此vmName参数实际传入instanceID
-	instanceID := vmName
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		VultrAPIBase+"/instances/"+instanceID,
-		nil,
-	)
-	if err != nil {
-		logger.Error("创建Vultr查询IP请求失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
-
-	client := &http.Client{Timeout: vc.timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error("发送Vultr查询IP请求失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		err := fmt.Errorf("获取Vultr VM IP失败: %s", body)
-		logger.Error("Vultr查询IP失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return "", err
-	}
-
-	var result getInstanceResp
-	if err := json.Unmarshal(body, &result); err != nil {
-		logger.Error("解析Vultr查询IP响应失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return "", err
-	}
-
-	logger.Info("获取Vultr VM公网IP", slog.String("pre", pre), slog.String("instanceID", instanceID),
-		slog.String("ip", result.Instance.MainIP), slog.String("status", result.Instance.Status))
-
-	return result.Instance.MainIP, nil
-}
-
-func (vc *ScalingOperate) DeleteVM(
-	ctx context.Context,
-	vmName string,
-	pre string,
-	logger *slog.Logger,
-) error {
-
-	// Vultr API通过instanceID删除，因此vmName参数实际传入instanceID
-	instanceID := vmName
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodDelete,
-		VultrAPIBase+"/instances/"+instanceID,
-		nil,
-	)
-	if err != nil {
-		logger.Error("创建Vultr删除VM请求失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
-
-	client := &http.Client{Timeout: vc.timeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error("发送Vultr删除VM请求失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		err := fmt.Errorf("删除Vultr VM失败: %s", body)
-		logger.Error("Vultr删除VM失败", slog.String("pre", pre), slog.String("instanceID", instanceID), "error", err)
-		return err
-	}
-
-	logger.Info("Vultr VM删除成功", slog.String("pre", pre), slog.String("instanceID", instanceID))
-
-	return nil
-}
-
-func NewScalingOperate(
-	cfg *Config,
-	sshKey string,
-	pre string,
-	logger *slog.Logger,
-) *ScalingOperate {
-
-	var sshKeys []string
-	sshKeys = append(sshKeys, sshKey)
-
-	so := &ScalingOperate{
-		apiKey:  cfg.APIKey,
-		region:  cfg.Region,
-		plan:    Plan,
-		sshKeys: sshKeys,
-		osID:    OsID,
-		timeout: 1 * time.Minute,
-	}
-	logger.Info("NewScalingOperate", slog.String("pre", pre), slog.Any("ScalingOperate", *so))
-
-	return so
-}
-
-// ExtractVultrFromInterface 解析JSON字符串为*VultrConfig（对齐GCP的ExtractGCPFromInterface）
-func ExtractVultrFromInterface(data string) (*Config, error) {
-	if data == "" {
-		return nil, errors.New("输入的JSON字符串为空")
-	}
-
-	config := &Config{}
-	if err := json.Unmarshal([]byte(data), config); err != nil {
-		return nil, fmt.Errorf("解析Vultr配置失败: %w", err)
-	}
-
-	// 基础校验
-	if config.APIKey == "" {
-		return nil, errors.New("Vultr APIKey不能为空")
-	}
-	if config.Region == "" {
-		return nil, errors.New("Vultr Region不能为空")
-	}
-
-	return config, nil
 }
 
 type createInstanceReq struct {
@@ -252,4 +56,191 @@ type getInstanceResp struct {
 		MainIP string `json:"main_ip"`
 		Status string `json:"status"`
 	} `json:"instance"`
+}
+
+func (vc *ScalingOperate) CreateVM(ctx context.Context, vmName string, pre string, logger *slog.Logger) (string, error) {
+
+	reqBody := createInstanceReq{
+		Region:   vc.region,
+		Plan:     vc.plan,
+		OsID:     vc.osID,
+		Label:    vmName,
+		Hostname: vmName,
+		SSHKeys:  vc.sshKeys,
+	}
+
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		logger.Error("Failed to serialize request body for creating VM", slog.String("pre", pre),
+			slog.String("vmName", vmName), slog.Any("err", err))
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		VultrAPIBase+"/instances",
+		bytes.NewReader(data),
+	)
+	if err != nil {
+		logger.Error("Failed to create VM", slog.String("pre", pre), slog.Any("err", err))
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: vc.timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("Failed to send VM creation request", slog.String("pre", pre), slog.Any("err", err))
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		err := fmt.Errorf("failed to create Vultr VM: %s", body)
+		logger.Error("failed to create VM", slog.String("pre", pre), slog.Any("err", err))
+		return "", err
+	}
+
+	var result createInstanceResp
+	if err := json.Unmarshal(body, &result); err != nil {
+		logger.Error("failed to parse create VM response", slog.String("pre", pre), slog.Any("err", err))
+		return "", err
+	}
+
+	logger.Info("successfully created VM", slog.String("pre", pre), slog.String("instanceID", result.Instance.ID))
+
+	return result.Instance.ID, nil
+}
+
+func (vc *ScalingOperate) GetVMPublicIP(ctx context.Context, vmName string, pre string, logger *slog.Logger) (string, error) {
+
+	// Vultr API通过instanceID查询，因此vmName参数实际传入instanceID
+	instanceID := vmName
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		VultrAPIBase+"/instances/"+instanceID,
+		nil,
+	)
+	if err != nil {
+		logger.Error("failed to create Vultr query IP request", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
+
+	client := &http.Client{Timeout: vc.timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("failed to send Vultr query IP request", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		err := fmt.Errorf("failed to get Vultr VM IP: %s", body)
+		logger.Error("failed to query Vultr VM IP", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return "", err
+	}
+
+	var result getInstanceResp
+	if err := json.Unmarshal(body, &result); err != nil {
+		logger.Error("failed to parse Vultr query IP response", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return "", err
+	}
+
+	logger.Info("successfully obtained Vultr VM public IP", slog.String("pre", pre), slog.String("instanceID", instanceID),
+		slog.String("ip", result.Instance.MainIP), slog.String("status", result.Instance.Status))
+
+	return result.Instance.MainIP, nil
+}
+
+func (vc *ScalingOperate) DeleteVM(ctx context.Context, vmName string, pre string, logger *slog.Logger) error {
+
+	instanceID := vmName
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodDelete,
+		VultrAPIBase+"/instances/"+instanceID,
+		nil,
+	)
+	if err != nil {
+		logger.Error("failed to create Vultr delete VM request", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+vc.apiKey)
+
+	client := &http.Client{Timeout: vc.timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error("failed to send Vultr delete VM request", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		err := fmt.Errorf("failed to delete Vultr VM: %s", body)
+		logger.Error("failed to delete Vultr VM", slog.String("pre", pre),
+			slog.String("instanceID", instanceID), slog.Any("err", err))
+		return err
+	}
+
+	logger.Info("successfully deleted Vultr VM", slog.String("pre", pre), slog.String("instanceID", instanceID))
+
+	return nil
+}
+
+func NewScalingOperate(cfg *Config, sshKey string, pre string, logger *slog.Logger) *ScalingOperate {
+
+	var sshKeys []string
+	sshKeys = append(sshKeys, sshKey)
+
+	so := &ScalingOperate{
+		apiKey:  cfg.APIKey,
+		region:  cfg.Region,
+		plan:    Plan,
+		sshKeys: sshKeys,
+		osID:    OsID,
+		timeout: 1 * time.Minute,
+	}
+	logger.Info("NewScalingOperate", slog.String("pre", pre), slog.Any("ScalingOperate", *so))
+
+	return so
+}
+
+func ExtractVultrFromInterface(data string) (*Config, error) {
+
+	if data == "" {
+		return nil, errors.New("input JSON string is empty")
+	}
+
+	config := &Config{}
+	if err := json.Unmarshal([]byte(data), config); err != nil {
+		return nil, fmt.Errorf("failed to parse Vultr configuration: %w", err)
+	}
+
+	// Basic validation
+	if config.APIKey == "" {
+		return nil, errors.New("Vultr APIKey must not be empty")
+	}
+	if config.Region == "" {
+		return nil, errors.New("Vultr Region must not be empty")
+	}
+
+	return config, nil
 }
