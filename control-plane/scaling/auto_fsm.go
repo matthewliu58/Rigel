@@ -64,7 +64,7 @@ func (s *Scaler) calculatePerturbation(pre string) float64 {
 }
 
 func (s *Scaler) calculateVolatilityAccumulation() float64 {
-	z := s.Node.P*s.Config.VolatilityWeight + s.Node.Z*s.Config.DecayFactor
+	z := s.Node.Perturbation*s.Config.VolatilityWeight + s.Node.Accumulation*s.Config.DecayFactor
 	if z < 0 {
 		return 0
 	}
@@ -75,10 +75,10 @@ func (s *Scaler) calculateDelta(node *NodeState) float64 {
 	if s.Override != nil && s.Override.Delta != nil {
 		return *s.Override.Delta
 	}
-	P := node.P
-	Z := node.Z
+	P := node.Perturbation
+	A := node.Accumulation
 	cost := s.calculateCost(node)
-	delta := -s.Config.DecayFactor*s.Config.VolatilityWeight*s.Config.QueueWeight*Z*P + s.Config.CostWeight*cost
+	delta := -s.Config.DecayFactor*s.Config.VolatilityWeight*s.Config.QueueWeight*A*P + s.Config.CostWeight*cost
 	return delta
 }
 
@@ -86,9 +86,9 @@ func (s *Scaler) calculateDelta(node *NodeState) float64 {
 func (s *Scaler) calculateCost(node *NodeState) float64 {
 	switch node.State {
 	case StateInactive:
-		return s.Config.ScalingCostFixed + s.Config.ScalingCostVariable*node.P
+		return s.Config.ScalingCostFixed + s.Config.ScalingCostVariable*node.Perturbation
 	case StateDormant:
-		return s.Config.ScalingCostVariable * node.P
+		return s.Config.ScalingCostVariable * node.Perturbation
 	default:
 		return 0
 	}
@@ -138,8 +138,8 @@ func (s *Scaler) AutoScaling() {
 	}
 
 	// 2. 计算当前扰动量 P 和波动值 Z and delta
-	node.P = s.calculatePerturbation(pre)
-	node.Z = s.calculateVolatilityAccumulation()
+	node.Perturbation = s.calculatePerturbation(pre)
+	node.Accumulation = s.calculateVolatilityAccumulation()
 	delta := s.calculateDelta(s.Node)
 	s.scalerDump(pre+"-after-calculate-delta", s.logger)
 	s.logger.Info("Calculate delta", slog.String("pre", pre), slog.Float64("delta", delta))

@@ -55,9 +55,9 @@ type ScaleConfig struct {
 // NodeState 表示每个节点的弹性伸缩状态
 type NodeState struct {
 	ID              string           `json:"id"`
-	P               float64          `json:"p"` //perturbation
-	Z               float64          `json:"z"` //volatility accumulation
 	State           NodeStatus       `json:"state"`
+	Perturbation    float64          `json:"perturbation"` //perturbation
+	Accumulation    float64          `json:"accumulation"` //volatility accumulation
 	RetainTime      time.Time        `json:"retain_time"`
 	ScaledVMs       []VM             `json:"scaled_vms"` //目前只能单个轮次转动这个状态机
 	ScaleHistory    []ScaleEvent     `json:"scale_history"`
@@ -138,8 +138,8 @@ func NewDefaultScaleConfig() *ScaleConfig {
 func NewNodeState(id string, queue *util.FixedQueue) *NodeState {
 	return &NodeState{
 		ID:              id,
-		P:               0, // 当前扰动 perturbation
-		Z:               0, // volatility accumulation
+		Perturbation:    0, // 当前扰动 perturbation
+		Accumulation:    0, // volatility accumulation
 		State:           StateInactive,
 		RetainTime:      time.Time{}, // 保持时间
 		ScaledVMs:       []VM{},      //目前只能单个轮次转动这个状态机

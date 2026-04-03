@@ -18,14 +18,10 @@ import (
 )
 
 const (
-	// AMI ID：us-east-1 区域的 Debian 12（可根据区域调整）
-	Debian12AmiID = "ami-0d985f0b838479990"
-	// 默认实例类型
+	Debian12AmiID       = "ami-0d985f0b838479990"
 	DefaultInstanceType = types.InstanceTypeT2Micro
-	// 默认磁盘大小（GB）
-	DefaultVolumeSize = int32(10)
-	// AWS SDK超时
-	Timeout = 30 * time.Second
+	DefaultVolumeSize   = int32(10)
+	//Timeout             = 30 * time.Second
 )
 
 type AWSConfig struct {
@@ -53,13 +49,13 @@ func (as *ScalingOperate) CreateVM(
 	vmName string,
 	pre string,
 	logger *slog.Logger,
-) error {
+) (string, error) {
 	// 初始化EC2客户端
 	if as.ec2Client == nil {
 		client, err := as.initEC2Client(ctx)
 		if err != nil {
 			logger.Error("初始化AWS EC2客户端失败", slog.String("pre", pre), "error", err)
-			return err
+			return "", err
 		}
 		as.ec2Client = client
 	}
@@ -120,7 +116,7 @@ func (as *ScalingOperate) CreateVM(
 			slog.String("vmName", vmName),
 			slog.String("region", as.region),
 			"error", err)
-		return err
+		return "", err
 	}
 
 	// 获取实例ID
@@ -132,7 +128,7 @@ func (as *ScalingOperate) CreateVM(
 		slog.String("status", string(result.Instances[0].State.Name)),
 	)
 
-	return nil
+	return instanceID, nil
 }
 
 // GetVMPublicIP 获取AWS EC2实例公网IP（实现OperateInterface接口）
@@ -248,11 +244,11 @@ func (as *ScalingOperate) DeleteVM(
 
 // initEC2Client 初始化EC2客户端
 func (as *ScalingOperate) initEC2Client(ctx context.Context) (*ec2.Client, error) {
+
 	// 1. 自定义HTTP客户端（纯Go标准库，无任何SDK中间件，绝对稳定）
 	httpClient := &http.Client{
-		Timeout: Timeout, // 全局超时：包含连接、TLS、读取、响应的所有阶段
-		Transport: &http.Transport{
-			// 细分超时（可选，进一步保障稳定性）
+		Timeout: 1 * time.Minute, // 全局超时：包含连接、TLS、读取、响应的所有阶段
+		Transport: &http.Transport{ // 细分超时（可选，进一步保障稳定性）
 			DialContext: (&net.Dialer{
 				Timeout:   15 * time.Second, // TCP连接超时
 				KeepAlive: 30 * time.Second,
