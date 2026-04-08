@@ -433,7 +433,7 @@ func (s *Scaler) createVM(ctx context.Context, pre string, logger *slog.Logger) 
 			return VM{}, fmt.Errorf("Timeout waiting for VM %s public IP after %v", vmName, totalTimeout)
 		case <-ticker.C:
 			ip, err = s.Interface.Operate.GetVMPublicIP(ctx, vmName, pre, logger)
-			if err == nil && ip != "" {
+			if err == nil && ip != "" && ip != "0.0.0.0" {
 				logger.Info("Got VM public IP successfully",
 					slog.String("pre", pre), slog.String("vmName", vmName), slog.String("ip", ip))
 				goto END
