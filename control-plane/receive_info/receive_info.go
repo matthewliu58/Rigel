@@ -1,4 +1,4 @@
-package collector
+package receive_info
 
 import (
 	"time"

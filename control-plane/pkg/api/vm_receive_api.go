@@ -1,7 +1,7 @@
 package api
 
 import (
-	model "control-plane/collector"
+	model "control-plane/receive_info"
 	"control-plane/util"
 	"log/slog"
 	"net/http"
@@ -17,7 +17,7 @@ import (
 
 // ReportHandler 接收VM上报数据的Handler
 // 职责：解析上报请求、校验参数、调用存储层、返回统一响应
-type VmReportAPIHandler struct {
+type VmReceiveAPIHandler struct {
 	storage    storage.Storage // 注入文件存储实现（依赖倒置，解耦具体存储）
 	logger     *slog.Logger
 	activityVM *util.SafeMap
@@ -26,13 +26,13 @@ type VmReportAPIHandler struct {
 // NewReportHandler 初始化ReportHandler
 // 参数：存储层实现实例
 // 返回：初始化后的ReportHandler指针
-func NewVmReportAPIHandler(s storage.Storage, l *slog.Logger) *VmReportAPIHandler {
-	return &VmReportAPIHandler{storage: s, logger: l, activityVM: util.NewSafeMap()}
+func NewVmReceiveAPIHandler(s storage.Storage, l *slog.Logger) *VmReceiveAPIHandler {
+	return &VmReceiveAPIHandler{storage: s, logger: l, activityVM: util.NewSafeMap()}
 }
 
 // PostVMReport 处理POST /api/v1/vm/report请求
 // 核心：请求体是ApiResponse（Data=VMReport），响应体也是ApiResponse（Data=填充后的VMReport）
-func (h *VmReportAPIHandler) PostVMReport(c *gin.Context) {
+func (h *VmReceiveAPIHandler) PostVMReceive(c *gin.Context) {
 
 	pre := util.GenerateRandomLetters(5)
 
@@ -43,7 +43,7 @@ func (h *VmReportAPIHandler) PostVMReport(c *gin.Context) {
 		Data: nil,
 	}
 
-	// 2. 【核心】先绑定外层ApiResponse
+	// 2. 先绑定外层ApiResponse
 	var req model.ApiResponse
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Code = 400
@@ -136,29 +136,16 @@ func (h *VmReportAPIHandler) PostVMReport(c *gin.Context) {
 }
 
 // NewRouter 初始化路由（无修改）
-func InitVmReportAPIRouter(router *gin.Engine, s *storage.FileStorage, logger *slog.Logger) *gin.Engine {
-
-	//logDir := filepath.Join(".", "vm_local_info_storage")
-	//var s storage.Storage
-	//s, _ = storage.NewFileStorage(logDir, 0, logger)
+func InitVmReceiveAPIRouter(router *gin.Engine, s *storage.FileStorage, logger *slog.Logger) *gin.Engine {
 
 	r := router
-
-	// 健康检查
-	//r.GET("/health", func(c *gin.Context) {
-	//	c.JSON(http.StatusOK, model.ApiResponse{
-	//		Code: 200,
-	//		Msg:  "success",
-	//		Data: gin.H{"time": time.Now().UTC().Format(time.RFC3339)},
-	//	})
-	//})
 	// 上报接口
 	apiV1 := r.Group("/api/v1")
 	{
 		vmGroup := apiV1.Group("/vm")
 		{
-			handler := NewVmReportAPIHandler(s, logger)
-			vmGroup.POST("/report", handler.PostVMReport)
+			handler := NewVmReceiveAPIHandler(s, logger)
+			vmGroup.POST("/receive", handler.PostVMReceive)
 		}
 	}
 	return r

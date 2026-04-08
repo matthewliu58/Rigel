@@ -1,7 +1,7 @@
 package api
 
 import (
-	model "control-plane/collector"
+	model "control-plane/receive_info"
 	"control-plane/scaling"
 	"control-plane/util"
 	"encoding/json"

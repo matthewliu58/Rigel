@@ -1,7 +1,7 @@
 package api
 
 import (
-	model "control-plane/collector"
+	model "control-plane/receive_info"
 	"control-plane/storage"
 	"control-plane/sync/etcd_client"
 	"control-plane/util"

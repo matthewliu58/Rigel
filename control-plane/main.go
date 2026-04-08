@@ -292,7 +292,7 @@ func main() {
 	router.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, "success") })
 
 	//收集上报的代理节点信息
-	api.InitVmReportAPIRouter(router, s, logger)
+	api.InitVmReceiveAPIRouter(router, s, logger)
 	//更改envoy的配置信息
 	api.InitEnvoyAPIRouter(router, operator, logger, logger1)
 	//下发探测任务 & 探测结果从 vm上报接口走

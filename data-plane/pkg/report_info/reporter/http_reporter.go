@@ -17,8 +17,8 @@ import (
 // 常量配置（写死）
 const (
 	//ControlHost    = "http://34.69.185.247:8081"
-	ReportURL      = "/api/v1/vm/report" // 控制平面地址
-	ReportInterval = 10 * time.Second    // 上报周期
+	ReportURL      = "/api/v1/vm/receive" // 控制平面地址
+	ReportInterval = 10 * time.Second     // 上报周期
 )
 
 // HTTPReporter HTTP上报器

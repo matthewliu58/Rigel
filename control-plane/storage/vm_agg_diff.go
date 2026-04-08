@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"control-plane/collector"
+	"control-plane/receive_info"
 	"control-plane/sync/etcd_client"
 	"control-plane/util"
 	"encoding/json"
@@ -36,12 +36,12 @@ type NodeCongestionInfo struct {
 
 // 链路拥塞信息
 type LinkCongestionInfo struct {
-	TargetIP       string              `json:"target_ip"` // 目标节点 IP
-	Target         collector.ProbeTask `json:"target"`
-	PacketLoss     float64             `json:"packet_loss"`     // 丢包率，百分比
-	WeightedCache  float64             `json:"weighted_cache"`  // 链路缓存情况（可选）
-	AverageLatency float64             `json:"average_latency"` // 平均延迟（毫秒）
-	BandwidthUsage float64             `json:"bandwidth_usage"` // 带宽利用率（可选百分比）
+	TargetIP       string                 `json:"target_ip"` // 目标节点 IP
+	Target         receive_info.ProbeTask `json:"target"`
+	PacketLoss     float64                `json:"packet_loss"`     // 丢包率，百分比
+	WeightedCache  float64                `json:"weighted_cache"`  // 链路缓存情况（可选）
+	AverageLatency float64                `json:"average_latency"` // 平均延迟（毫秒）
+	BandwidthUsage float64                `json:"bandwidth_usage"` // 带宽利用率（可选百分比）
 }
 
 // 节点遥测数据
@@ -65,10 +65,10 @@ func CalcClusterWeightedAvg(fs *FileStorage, interval time.Duration,
 
 	// 临时链路统计结构体，补充json tag适配JSON解析/序列化
 	type tempLinksCongStruct struct {
-		TargetIP         string              `json:"target_ip"`
-		PacketLosses     []float64           `json:"packet_losses"`     // 若为单个丢包率则用packet_loss，数组用packet_losses
-		AverageLatencies []float64           `json:"average_latencies"` // 单个延迟则用average_latency，数组用average_latencies
-		ProbeTask        collector.ProbeTask `json:"probe_task"`
+		TargetIP         string                 `json:"target_ip"`
+		PacketLosses     []float64              `json:"packet_losses"`     // 若为单个丢包率则用packet_loss，数组用packet_losses
+		AverageLatencies []float64              `json:"average_latencies"` // 单个延迟则用average_latency，数组用average_latencies
+		ProbeTask        receive_info.ProbeTask `json:"probe_task"`
 	}
 
 	// 3. 无限循环，定时触发核心逻辑（复用GetAll()）
