@@ -14,8 +14,8 @@ import (
 
 const (
 	VultrAPIBase = "https://api.vultr.com/v2"
-	OsID         = 535 // Debian 12
-	Plan         = "voc-g-8c-32gb-160s"
+	OsID         = 535          // Debian 12
+	Plan         = "vc2-1c-1gb" //"voc-g-8c-32gb-160s"
 	//Timeout      = 1 * time.Minute
 )
 
@@ -101,17 +101,17 @@ func (vc *ScalingOperate) CreateVM(ctx context.Context, vmName string, pre strin
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
 		err := fmt.Errorf("failed to create Vultr VM: %s", body)
-		logger.Error("failed to create VM", slog.String("pre", pre), slog.Any("err", err))
+		logger.Error("Failed to create VM", slog.String("pre", pre), slog.Any("err", err))
 		return "", err
 	}
 
 	var result createInstanceResp
 	if err := json.Unmarshal(body, &result); err != nil {
-		logger.Error("failed to parse create VM response", slog.String("pre", pre), slog.Any("err", err))
+		logger.Error("Failed to parse create VM response", slog.String("pre", pre), slog.Any("err", err))
 		return "", err
 	}
 
-	logger.Info("successfully created VM", slog.String("pre", pre), slog.String("instanceID", result.Instance.ID))
+	logger.Info("Successfully created VM", slog.String("pre", pre), slog.String("instanceID", result.Instance.ID))
 
 	return result.Instance.ID, nil
 }
@@ -128,7 +128,7 @@ func (vc *ScalingOperate) GetVMPublicIP(ctx context.Context, vmName string, pre 
 		nil,
 	)
 	if err != nil {
-		logger.Error("failed to create Vultr query IP request", slog.String("pre", pre),
+		logger.Error("Failed to create Vultr query IP request", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return "", err
 	}
@@ -138,7 +138,7 @@ func (vc *ScalingOperate) GetVMPublicIP(ctx context.Context, vmName string, pre 
 	client := &http.Client{Timeout: vc.timeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("failed to send Vultr query IP request", slog.String("pre", pre),
+		logger.Error("Failed to send Vultr query IP request", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return "", err
 	}
@@ -147,19 +147,19 @@ func (vc *ScalingOperate) GetVMPublicIP(ctx context.Context, vmName string, pre 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
 		err := fmt.Errorf("failed to get Vultr VM IP: %s", body)
-		logger.Error("failed to query Vultr VM IP", slog.String("pre", pre),
+		logger.Error("Failed to query Vultr VM IP", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return "", err
 	}
 
 	var result getInstanceResp
 	if err := json.Unmarshal(body, &result); err != nil {
-		logger.Error("failed to parse Vultr query IP response", slog.String("pre", pre),
+		logger.Error("Failed to parse Vultr query IP response", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return "", err
 	}
 
-	logger.Info("successfully obtained Vultr VM public IP", slog.String("pre", pre), slog.String("instanceID", instanceID),
+	logger.Info("Successfully obtained Vultr VM public IP", slog.String("pre", pre), slog.String("instanceID", instanceID),
 		slog.String("ip", result.Instance.MainIP), slog.String("status", result.Instance.Status))
 
 	return result.Instance.MainIP, nil
@@ -176,7 +176,7 @@ func (vc *ScalingOperate) DeleteVM(ctx context.Context, vmName string, pre strin
 		nil,
 	)
 	if err != nil {
-		logger.Error("failed to create Vultr delete VM request", slog.String("pre", pre),
+		logger.Error("Failed to create Vultr delete VM request", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return err
 	}
@@ -186,7 +186,7 @@ func (vc *ScalingOperate) DeleteVM(ctx context.Context, vmName string, pre strin
 	client := &http.Client{Timeout: vc.timeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("failed to send Vultr delete VM request", slog.String("pre", pre),
+		logger.Error("Failed to send Vultr delete VM request", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return err
 	}
@@ -195,12 +195,12 @@ func (vc *ScalingOperate) DeleteVM(ctx context.Context, vmName string, pre strin
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		err := fmt.Errorf("failed to delete Vultr VM: %s", body)
-		logger.Error("failed to delete Vultr VM", slog.String("pre", pre),
+		logger.Error("Failed to delete Vultr VM", slog.String("pre", pre),
 			slog.String("instanceID", instanceID), slog.Any("err", err))
 		return err
 	}
 
-	logger.Info("successfully deleted Vultr VM", slog.String("pre", pre), slog.String("instanceID", instanceID))
+	logger.Info("Successfully deleted Vultr VM", slog.String("pre", pre), slog.String("instanceID", instanceID))
 
 	return nil
 }

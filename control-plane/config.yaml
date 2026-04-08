@@ -18,8 +18,8 @@ scaling:
   local_path_plane: "./install/data-plane"
   remote_path_plane: "/root/data-plane"
   binary_plane: "data-plane"
-  private_key: "/root/.ssh/id_rsa"
   config: "{}"
+  private_key: "/root/.ssh/id_rsa"
   ssh_key: "matth:ssh-rsa AAAA= matth@instance-20260202-081539"
 
 node:

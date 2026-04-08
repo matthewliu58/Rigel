@@ -33,7 +33,7 @@ func (s *Scaler) ManualScaling(pre, action, ip, vmName string) {
 		}
 	case ActionSleep:
 		s.triggerDormant(vm_, pre)
-	case ActionStart:
+	case ActionReStart:
 		s.triggerScalingFromDormant(vm_, pre)
 	case ActionRelease:
 		s.triggerRelease(vm_, pre)

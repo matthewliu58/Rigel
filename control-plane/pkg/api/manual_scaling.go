@@ -43,9 +43,9 @@ func (h *ManualScalingAPIHandler) PostManualScaling(c *gin.Context) {
 	var req ManualScalingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		resp.Code = 400
-		resp.Msg = "请求格式错误：不是合法ManualScalingRequest结构 - " + err.Error()
+		resp.Msg = err.Error()
 		c.JSON(http.StatusOK, resp)
-		h.Logger.Error("解析ManualScalingRequest错误", slog.String("pre", pre), slog.Any("error", err))
+		h.Logger.Error("Failed to parse ManualScalingRequest", slog.String("pre", pre), slog.Any("error", err))
 		return
 	}
 

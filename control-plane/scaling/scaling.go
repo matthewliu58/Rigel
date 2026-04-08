@@ -28,7 +28,7 @@ const (
 	ActionInit    = "init"
 	ActionScaleUp = "scale_up"
 	ActionSleep   = "sleep"
-	ActionStart   = "start"
+	ActionReStart = "restart"
 	ActionRelease = "release"
 	ActionAddVM   = "add"
 	ActionDelVM   = "del"
@@ -156,7 +156,7 @@ func NewScaler(nodeID string, config *ScaleConfig, queue *util.FixedQueue, pre s
 		config = NewDefaultScaleConfig()
 	}
 
-	si := InitInterface(util.Config_.Node.Provider, util.Config_.Scaling.ScalingConfig, pre, logger)
+	si := InitInterface(util.Config_.Node.Provider, util.Config_.Scaling.Config, pre, logger)
 	return &Scaler{
 		Interface:    si,
 		Config:       config,

@@ -35,7 +35,7 @@ type ScalingConfig struct {
 	LocalPathPlane  string `yaml:"local_path_plane"`
 	RemotePathPlane string `yaml:"remote_path_plane"`
 	BinaryPlane     string `yaml:"binary_plane"`
-	ScalingConfig   string `yaml:"scaling_config"`
+	Config          string `yaml:"config"`
 	PrivateKey      string `yaml:"private_key"`
 	SshKey          string `yaml:"ssh_key"`
 }
