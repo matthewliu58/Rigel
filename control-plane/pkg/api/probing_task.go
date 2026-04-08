@@ -1,10 +1,10 @@
 package api
 
 import (
+	model "control-plane/collector"
 	"control-plane/storage"
 	"control-plane/sync/etcd_client"
 	"control-plane/util"
-	model "control-plane/collector"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"

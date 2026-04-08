@@ -1,9 +1,9 @@
 package api
 
 import (
+	model "control-plane/collector"
 	"control-plane/routing"
 	"control-plane/util"
-	model "control-plane/collector"
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"net/http"
