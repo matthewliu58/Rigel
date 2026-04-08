@@ -1,7 +1,7 @@
 mod config;
 mod logger;
-mod client_pool;
-mod proxy_handler;
+mod client-pool;
+mod proxy-handler;
 mod health;
 mod congestion;
 mod utils;
@@ -11,7 +11,7 @@ use crate::config::{BUFFER_SIZE, PORT};
 use crate::congestion::{check_congestion};
 use crate::health::{health, health_state_change};
 use crate::logger::init_logger;
-use crate::proxy_handler::proxy_handler;
+use crate::proxy-handler::proxy_handler;
 use serde_json::json;
 use tracing::{error, info};
 
