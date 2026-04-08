@@ -26,6 +26,46 @@ type Config struct {
 	//SSHKeys string `json:"sshKeys"`
 }
 
+func NewScalingOperate(cfg *Config, sshKey string, pre string, logger *slog.Logger) *ScalingOperate {
+
+	var sshKeys []string
+	sshKeys = append(sshKeys, sshKey)
+
+	so := &ScalingOperate{
+		apiKey:  cfg.APIKey,
+		region:  cfg.Region,
+		plan:    Plan,
+		sshKeys: sshKeys,
+		osID:    OsID,
+		timeout: 1 * time.Minute,
+	}
+	logger.Info("NewScalingOperate", slog.String("pre", pre), slog.Any("ScalingOperate", *so))
+
+	return so
+}
+
+func ExtractVultrFromInterface(data string) (*Config, error) {
+
+	if data == "" {
+		return nil, errors.New("input JSON string is empty")
+	}
+
+	config := &Config{}
+	if err := json.Unmarshal([]byte(data), config); err != nil {
+		return nil, fmt.Errorf("failed to parse Vultr configuration: %w", err)
+	}
+
+	// Basic validation
+	if config.APIKey == "" {
+		return nil, errors.New("Vultr APIKey must not be empty")
+	}
+	if config.Region == "" {
+		return nil, errors.New("Vultr Region must not be empty")
+	}
+
+	return config, nil
+}
+
 type ScalingOperate struct {
 	apiKey  string   // Vultr API
 	region  string   // region
@@ -203,44 +243,4 @@ func (vc *ScalingOperate) DeleteVM(ctx context.Context, vmName string, pre strin
 	logger.Info("Successfully deleted Vultr VM", slog.String("pre", pre), slog.String("instanceID", instanceID))
 
 	return nil
-}
-
-func NewScalingOperate(cfg *Config, sshKey string, pre string, logger *slog.Logger) *ScalingOperate {
-
-	var sshKeys []string
-	sshKeys = append(sshKeys, sshKey)
-
-	so := &ScalingOperate{
-		apiKey:  cfg.APIKey,
-		region:  cfg.Region,
-		plan:    Plan,
-		sshKeys: sshKeys,
-		osID:    OsID,
-		timeout: 1 * time.Minute,
-	}
-	logger.Info("NewScalingOperate", slog.String("pre", pre), slog.Any("ScalingOperate", *so))
-
-	return so
-}
-
-func ExtractVultrFromInterface(data string) (*Config, error) {
-
-	if data == "" {
-		return nil, errors.New("input JSON string is empty")
-	}
-
-	config := &Config{}
-	if err := json.Unmarshal([]byte(data), config); err != nil {
-		return nil, fmt.Errorf("failed to parse Vultr configuration: %w", err)
-	}
-
-	// Basic validation
-	if config.APIKey == "" {
-		return nil, errors.New("Vultr APIKey must not be empty")
-	}
-	if config.Region == "" {
-		return nil, errors.New("Vultr Region must not be empty")
-	}
-
-	return config, nil
 }

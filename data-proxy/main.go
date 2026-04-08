@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -269,10 +268,10 @@ func main() {
 			slog.Any("config", config.Config_))
 	}
 
-	mem := config.Config_.Mem
-	debug.SetMemoryLimit(mem << 30)
-	currentLimit := debug.SetMemoryLimit(-1)
-	logger.Info("set memory limit", slog.String("pre", pre), "mem", mem, "current_limit", currentLimit)
+	//mem := config.Config_.Mem
+	//debug.SetMemoryLimit(mem << 30)
+	//currentLimit := debug.SetMemoryLimit(-1)
+	//logger.Info("set memory limit", slog.String("pre", pre), "mem", mem, "current_limit", currentLimit)
 
 	router := gin.Default()
 	router.GET("/healthStateChange", health.HealthStateChange(logger))

@@ -121,7 +121,7 @@ func (o *EnvoyPortAPIHandler) UpdateGlobalTargetAddrsHandler(c *gin.Context) {
 		o.logger.Error("Invalid request body", slog.String("pre", pre), "error", err)
 		c.JSON(http.StatusOK, envoymanager2.APICommonResp{
 			Code:    400,
-			Message: "参数错误：" + err.Error(),
+			Message: err.Error(),
 			Data:    nil,
 		})
 		return
@@ -146,7 +146,7 @@ func (o *EnvoyPortAPIHandler) UpdateGlobalTargetAddrsHandler(c *gin.Context) {
 		o.logger.Error("Failed to update target addrs", slog.String("pre", pre), "error", err)
 		c.JSON(http.StatusInternalServerError, envoymanager2.APICommonResp{
 			Code:    500,
-			Message: "更新后端地址失败：" + err.Error(),
+			Message: err.Error(),
 			Data:    nil,
 		})
 		return
@@ -155,7 +155,7 @@ func (o *EnvoyPortAPIHandler) UpdateGlobalTargetAddrsHandler(c *gin.Context) {
 	// 3. 返回成功响应
 	o.logger.Info("Update envoy target addrs success", slog.String("pre", pre), "target_addrs", req)
 	c.JSON(http.StatusOK, envoymanager2.APICommonResp{
-		Code:    0,
+		Code:    200,
 		Message: "更新后端地址成功",
 		Data:    nil,
 	})
