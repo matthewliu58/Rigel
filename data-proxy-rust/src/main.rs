@@ -8,7 +8,7 @@ mod utils;
 
 use axum::{routing::get, Router};
 use crate::config::{BUFFER_SIZE, PORT};
-use crate::congestion::{check_congestion, get_process_max_memory};
+use crate::congestion::{check_congestion};
 use crate::health::{health, health_state_change};
 use crate::logger::init_logger;
 use crate::proxy_handler::proxy_handler;
@@ -19,7 +19,7 @@ use serde::Deserialize;
 use std::error::Error;
 
 // 限制进程最大内存（RLIMIT_AS）
-use libc::{rlimit, RLIMIT_AS, setrlimit};
+// use libc::{rlimit, RLIMIT_AS, setrlimit};
 
 // 配置结构体
 #[derive(Debug, Deserialize, Clone)]
@@ -39,19 +39,19 @@ pub fn load_config() -> Result<AppConfig, Box<dyn Error>> {
 }
 
 //设置进程最大内存（从配置文件读取）
-fn set_process_max_memory(mem_gb: u64) {
-    let max_bytes = mem_gb * 1024 * 1024 * 1024; // 转成字节
-
-    let rlim = rlimit {
-        rlim_cur: max_bytes,
-        rlim_max: max_bytes,
-    };
-
-    unsafe {
-        setrlimit(RLIMIT_AS, &rlim);
-    }
-    info!("内存限制已设置: {} GB", mem_gb);
-}
+// fn set_process_max_memory(mem_gb: u64) {
+//     let max_bytes = mem_gb * 1024 * 1024 * 1024; // 转成字节
+//
+//     let rlim = rlimit {
+//         rlim_cur: max_bytes,
+//         rlim_max: max_bytes,
+//     };
+//
+//     unsafe {
+//         setrlimit(RLIMIT_AS, &rlim);
+//     }
+//     info!("内存限制已设置: {} GB", mem_gb);
+// }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,9 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     PORT.set(config.port.clone()).unwrap();
 
     //从配置文件设置内存上限
-    set_process_max_memory(config.mem);
-    let max_mem = get_process_max_memory();
-    println!("当前进程最大内存：{} MB", max_mem / 1024 / 1024);
+//     set_process_max_memory(config.mem);
+//     let max_mem = get_process_max_memory();
+//     println!("当前进程最大内存：{} MB", max_mem / 1024 / 1024);
 
     // 路由
     let app = Router::new()
