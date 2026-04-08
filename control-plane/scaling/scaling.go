@@ -170,7 +170,7 @@ func NewScaler(nodeID string, config *ScaleConfig, queue *util.FixedQueue, pre s
 }
 
 func (s *Scaler) scalerDump(pre string, logger *slog.Logger) {
-	logger.Info("Scalar dump", slog.String("pre", pre), slog.Any("config", s.Config),
+	s.logger.Info("Scalar dump", slog.String("pre", pre), slog.Any("config", s.Config),
 		slog.Any("node", s.Node), slog.Any("override", s.Override))
 }
 

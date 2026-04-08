@@ -14,7 +14,7 @@ import (
 
 const (
 	VultrAPIBase = "https://api.vultr.com/v2"
-	OsID         = 1744         // Debian 12
+	OsID         = 2136         // Debian 12
 	Plan         = "vc2-1c-1gb" //"voc-g-8c-32gb-160s"
 	//Timeout      = 1 * time.Minute
 )

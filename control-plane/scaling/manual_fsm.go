@@ -41,7 +41,7 @@ func (s *Scaler) ManualScaling(pre, action, ip, vmName string) {
 		s.logger.Warn("The action is nonexist", slog.String("pre", pre), slog.String("odd action", action))
 	}
 
-	s.scalerDump(pre, nil)
+	s.scalerDump(pre, s.logger)
 	s.logger.Info("ManualScaling state change", slog.String("pre", pre),
 		slog.String("old state", s.ManualAction), slog.String("new state", action))
 	s.ManualAction = action
