@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+if sudo dmidecode -s system-manufacturer 2>/dev/null | grep -qi "vultr"; then
+    echo "==> Vultr machine detected, disabling UFW firewall..."
+    sudo ufw disable
+    sudo systemctl stop ufw
+    sudo systemctl disable ufw
+else
+    echo "==> Not Vultr machine, skip UFW disable"
+fi
+
 GO_VERSION="1.21.3"
 GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
 GO_URL="https://dl.google.com/go/${GO_TAR}"

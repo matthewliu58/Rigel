@@ -18,7 +18,7 @@ scaling:
   local_path_plane: "./install/data-plane"
   remote_path_plane: "/root/data-plane"
   binary_plane: "data-plane"
-  config: "{}"
+  config: '{"apiKey":"AAAA-BBBB-CCCC-DDDD","region":"ewr"}'
   private_key: "/root/.ssh/id_rsa"
   ssh_key: "ssh-rsa"
 
