@@ -192,6 +192,6 @@ func main() {
 	logger.Info("API端口启动", slog.String("pre", logPre), slog.String("addr", ":8082"))
 	if err := router.Run(":8082"); err != nil {
 		logger.Error("API服务启动失败", slog.String("pre", logPre), slog.Any("err", err))
-		os.Exit(1)
+		return
 	}
 }

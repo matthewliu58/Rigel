@@ -302,12 +302,9 @@ func main() {
 	//手动控制scaling的接口
 	api.InitManualScalingRouter(router, es, logger, logger1)
 
-	logger.Info("Envoy端口管理API启动", slog.String("pre", logPre), slog.String("addr", ":8081")) // 启动API服务
+	logger.Info("API服务启动成功", slog.String("pre", logPre), slog.String("port", ":8081")) // 启动API服务
 	if err := router.Run(":8081"); err != nil {
 		logger.Error("API服务启动失败", slog.String("pre", logPre), slog.Any("err", err))
-		//os.Exit(1)
 		return
 	}
-
-	return
 }

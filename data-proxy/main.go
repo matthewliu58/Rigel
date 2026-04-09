@@ -282,8 +282,9 @@ func main() {
 	port := "8095"
 	port = config.Config_.Port
 
-	logger.Info("Listening", slog.String("pre", pre), "port", port)
+	logger.Info("Gin Run success", slog.String("pre", pre), slog.String("port", port))
 	if err := router.Run(":" + port); err != nil {
-		logger.Error("Gin Run failed", slog.String("pre", pre), "error", err)
+		logger.Error("Gin Run failed", slog.String("pre", pre), slog.Any("err", err))
+		return
 	}
 }

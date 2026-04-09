@@ -123,6 +123,9 @@ func main() {
 	router.POST("/api/v1/chunk/merge", api.ChunkMergeHandler(logger))   // 分片合并（指定顺序）
 
 	port := "8080"
-	logger.Info("Starting server on port", slog.String("pre", pre), slog.String("port", port))
-	router.Run(":" + port)
+	logger.Info("Gin Run success", slog.String("pre", pre), slog.String("port", port))
+	if err := router.Run(":" + port); err != nil {
+		logger.Error("Gin Run failed", slog.String("pre", pre), slog.Any("err", err))
+		return
+	}
 }
