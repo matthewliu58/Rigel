@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"golang.org/x/oauth2/google"
 	"log/slog"
 	"math/bits"
 	"math/rand"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2/google"
 )
 
 func GenerateRandomLetters(length int) string {
@@ -234,13 +235,6 @@ func DeleteFilesInDir(dir string, fileNames []string, pre string, logger *slog.L
 	return nil
 }
 
-// ReplaceUploadURLHost 替换Upload URL中的IP:Port为first hop的值
-// 入参：
-//   - originalUploadURL: 原始Upload URL（如 "http://127.0.0.1:8081/api/v1/chunk/upload"）
-//   - firstHop: 目标IP:Port（如 "192.168.1.100:8082"）
-//
-// 出参：
-//   - 替换后的URL / 错误信息
 func ReplaceUploadURLHost(originalUploadURL, firstHop string) (string, error) {
 	// 1. 校验入参合法性
 	if originalUploadURL == "" {
